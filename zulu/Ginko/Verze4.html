@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Checklist – Zakázka – Verze4</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --green:#92d050; --green2:#81d41a; --yellow:#ffff00; --red:#ff0000;
+  --blue:#b8d4e8; --blue2:#d6e4f0; --gray:#d9d9d9;
+  --border:1px solid #000; --border-thick:2px solid #000;
+  --topbar-h:56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow-x:hidden;}
+body{font-family:'Calibri','Liberation Sans',Arial,sans-serif;font-size:11px;background:#e0e0e0;color:#000;}
+
+/* ===== TOPBAR ===== */
+#topbar{
+  position:sticky;top:0;z-index:200;
+  background:#1a1a2e;color:#fff;
+  display:flex;align-items:center;gap:8px;
+  padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,.5);
+  flex-wrap:wrap;min-height:var(--topbar-h);
+}
+#topbar-title{font-size:12px;font-weight:700;letter-spacing:.5px;color:#92d050;flex:1;white-space:nowrap;}
+#mic-btn{
+  background:#92d050;color:#000;border:none;border-radius:50%;
+  width:44px;height:44px;font-size:22px;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .2s,transform .1s;touch-action:manipulation;
+}
+#mic-btn.listening{background:#ff4444;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+#mic-status{font-size:10px;color:#aaa;background:rgba(255,255,255,.07);padding:3px 7px;border-radius:4px;white-space:nowrap;}
+#mic-status.active{color:#92d050;}
+#transcript-box{font-size:9px;color:#888;max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1;}
+.tb-btns{display:flex;gap:5px;flex-wrap:wrap;}
+.tb-btn{
+  background:#2d2d4e;color:#ccc;border:1px solid #555;
+  padding:6px 10px;border-radius:5px;cursor:pointer;font-size:11px;
+  transition:background .15s;touch-action:manipulation;white-space:nowrap;
+}
+.tb-btn:active{background:#3d3d6e;}
+.tb-btn.primary{background:#92d050;color:#000;border-color:#92d050;}
+.tb-btn.primary:active{background:#7ab840;}
+.tb-btn.save-btn{background:#2d4e2d;color:#92d050;border-color:#92d050;}
+
+/* ===== SAVE INDICATOR ===== */
+#save-indicator{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:#1a1a2e;color:#92d050;border:1px solid #92d050;
+  padding:6px 16px;border-radius:20px;font-size:11px;
+  z-index:300;opacity:0;transition:opacity .4s;pointer-events:none;
+}
+#save-indicator.show{opacity:1;}
+
+/* ===== TABS ===== */
+#tabs{display:flex;gap:2px;padding:6px 8px 0;background:#c8c8c8;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+#tabs::-webkit-scrollbar{display:none;}
+.tab-btn{
+  padding:7px 12px;border:var(--border);border-bottom:none;
+  background:#b0b0b0;cursor:pointer;font-size:11px;font-weight:600;
+  border-radius:4px 4px 0 0;white-space:nowrap;flex-shrink:0;
+  transition:background .15s;touch-action:manipulation;
+}
+.tab-btn.active{background:#fff;}
+
+/* ===== SHEETS ===== */
+#sheets-wrapper{background:#fff;padding:8px;overflow-x:auto;}
+.sheet{display:none;}
+.sheet.active{display:block;}
+
+/* ===== TABLE ===== */
+.cl-table{width:100%;border-collapse:collapse;font-size:11px;}
+.cl-table td,.cl-table th{border:var(--border);padding:2px 4px;vertical-align:middle;line-height:1.3;}
+.bg-green{background:#92d050!important;}
+.bg-green2{background:#81d41a!important;}
+.bg-yellow{background:#ffff00!important;}
+.bg-red{background:#ff0000!important;color:#fff!important;}
+.bg-gray{background:#d9d9d9!important;}
+.bg-blue{background:#b8d4e8!important;}
+.bg-blue2{background:#d6e4f0!important;}
+.txt-red{color:#ff0000!important;}
+.txt-bold{font-weight:bold;}
+.txt-center{text-align:center;}
+.txt-right{text-align:right;}
+.txt-small{font-size:9px;}
+.txt-italic{font-style:italic;}
+.cell-input{
+  width:100%;border:none;background:transparent;
+  font-family:inherit;font-size:inherit;color:inherit;
+  outline:none;padding:0;font-weight:inherit;
+  -webkit-appearance:none;
+}
+.cell-input:focus{background:rgba(146,208,80,.15);}
+.hl{outline:2px solid #92d050!important;background:rgba(146,208,80,.2)!important;}
+input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+
+/* ===== WEATHER BAR ===== */
+#weather-bar{
+  background:#d6e4f0;border:var(--border);padding:4px 8px;
+  font-size:10px;margin-bottom:4px;display:flex;gap:10px;
+  align-items:center;flex-wrap:wrap;
+}
+#weather-bar .wl{color:#555;}
+#w-source{font-size:9px;color:#777;}
+
+/* ===== VOICE OVERLAY ===== */
+#voice-overlay{
+  position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
+  background:rgba(20,20,40,.95);color:#fff;
+  padding:10px 16px;border-radius:12px;
+  font-size:12px;min-width:220px;max-width:90vw;
+  display:none;border:1px solid #92d050;z-index:300;text-align:center;
+}
+#voice-overlay.show{display:block;}
+#vof-name{color:#92d050;font-weight:bold;font-size:13px;}
+#vof-interim{color:#bbb;font-style:italic;margin-top:4px;font-size:11px;min-height:16px;}
+
+/* ===== HELP PANEL ===== */
+#help-panel{
+  display:none;position:fixed;top:var(--topbar-h);right:0;
+  background:#1a1a2e;color:#ddd;padding:12px;
+  border-radius:0 0 0 8px;width:min(300px,95vw);font-size:10px;
+  border:1px solid #92d050;z-index:250;line-height:1.8;
+  max-height:80vh;overflow-y:auto;
+}
+#help-panel.show{display:block;}
+#help-panel h3{color:#92d050;margin-bottom:6px;font-size:11px;}
+.cmd{color:#81d41a;font-weight:bold;}
+#help-close{float:right;background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;}
+
+/* ===== MOBILE BOTTOM SPACE ===== */
+.bottom-space{height:80px;}
+
+/* ===== PRINT ===== */
+@media print{
+  #topbar,#tabs,#weather-bar,#voice-overlay,#help-panel,#save-indicator,.bottom-space{display:none!important;}
+  body{background:#fff;font-size:9px;}
+  #sheets-wrapper{padding:0;}
+  .sheet{display:block!important;}
+  .print-page{page-break-after:always;}
+  .print-row{display:flex;gap:4mm;}
+  .print-row .sheet{flex:1;min-width:0;page-break-after:avoid;}
+  @page{size:A4 landscape;margin:8mm;}
+}
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media(max-width:600px){
+  .cl-table td,.cl-table th{padding:1px 3px;font-size:10px;}
+  #sheets-wrapper{padding:4px;}
+  .tb-btn{padding:5px 8px;font-size:10px;}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <span id="topbar-title">📋 CHECKLIST · Verze4</span>
+  <button id="mic-btn" title="Mikrofon">🎤</button>
+  <div id="mic-status">Mikrofon off</div>
+  <div id="transcript-box">—</div>
+  <div class="tb-btns">
+    <button class="tb-btn save-btn" onclick="saveToLocal()">💾 Uložit</button>
+    <button class="tb-btn save-btn" onclick="loadLastSave()">📂 Načíst</button>
+    <button class="tb-btn primary" onclick="exportExcel()">⬇ Excel</button>
+    <button class="tb-btn" onclick="printSheets()">🖨 Tisk</button>
+    <button class="tb-btn" onclick="toggleHelp()">❓</button>
+  </div>
+</div>
+
+<!-- HELP PANEL -->
+<div id="help-panel">
+  <button id="help-close" onclick="toggleHelp()">✕</button>
+  <h3>🎙 Hlasová hesla</h3>
+  <label><input type="checkbox" id="continuous-voice" checked
+    onchange="checkpointSpeech()"> Souvislé diktování</label><br>
+  V souvislém režimu se text ukazuje rovnou v políčku. Diktujte dál bez
+  čekání; další políčko určíte heslem, například „jméno Jan Novák začátek
+  sedm příjezd osm“. Text se průběžně upřesňuje. Pro volný text klikněte
+  do políčka; další údaj zahajte heslem nebo „další políčko“.
+  Vypnutím souvislého režimu obnovíte automatický posun po dokončené větě.<br><br>
+  V poznámkách jsou názvy polí běžným textem. Přechod určete slovy
+  „další políčko“ nebo „další poznámka“. U materiálu nejprve určete
+  „materiál“, potom „jednotka“ a „množství“. Do tisku a uložení vstupují
+  potvrzené údaje; průběžný náhled se ještě může změnit.<br><br>
+  <details><summary>Přepis diktování</summary>
+    <textarea id="speech-history" readonly aria-label="Přepis diktování"
+      style="width:100%;min-height:90px" placeholder="Zde se uchovává přepis, dokud stránku nezavřete."></textarea>
+  </details><br>
+  <b>Obecné:</b><br>
+  <span class="cmd">"zakázka [text]"</span> → zakázka<br>
+  <span class="cmd">"vedoucí [jméno]"</span> → vedoucí<br>
+  <span class="cmd">"poznámka [text]"</span> → 1. poznámka<br>
+  <span class="cmd">"další poznámka [text]"</span> → další řádek poznámky<br>
+  <br>
+  <b>Lidé (záložka 2):</b><br>
+  <span class="cmd">"lidé"</span> → otevře prázdný řádek<br>
+  <span class="cmd">"další osoba"</span> → další prázdný řádek<br>
+  <span class="cmd">"jméno [jméno]"</span> → nová osoba<br>
+  <span class="cmd">"[jméno osoby]"</span> → vyvolá osobu<br>
+  <span class="cmd">"začátek [čas]"</span> → začátek práce<br>
+  <span class="cmd">"příjezd [čas]"</span> → příjezd na zakázku<br>
+  <span class="cmd">"oběd [čas-čas]"</span> → oběd<br>
+  <span class="cmd">"konec [čas]"</span> → konec práce<br>
+  <span class="cmd">"kilometry [číslo]"</span> → km osobní vůz<br>
+  <span class="cmd">"příspěvek [číslo]"</span> → příspěvek km<br>
+  <span class="cmd">"vozidlo [typ]"</span> nebo <span class="cmd">"auto [typ]"</span> → vozidlo<br>
+  <span class="cmd">"příjezd vozidla [čas]"</span> → příjezd vozidla<br>
+  <span class="cmd">"odjezd [čas]"</span> → odjezd vozidla<br>
+  <span class="cmd">"počet km [číslo]"</span> → km celkem<br>
+  <span class="cmd">"vozík [ano/ne]"</span> → vozík<br>
+  <span class="cmd">"počasí [popis]"</span> → počasí<br>
+  <br>
+  <b>Materiál (záložka 3):</b><br>
+  <span class="cmd">"materiál [název]"</span> → nový řádek materiálu<br>
+  <span class="cmd">"jednotka [jed]"</span> → jednotka<br>
+  <span class="cmd">"množství [číslo]"</span> → množství<br>
+  <span class="cmd">"další řádek"</span> → přejde na další řádek<br>
+  <br>
+  <b>Pracovní činnosti (záložka 4):</b><br>
+  <span class="cmd">"práce [popis]"</span> nebo <span class="cmd">"činnost [popis]"</span> → nová práce<br>
+  <span class="cmd">"výkon [hodnota]"</span> → výkon<br>
+  <span class="cmd">"jméno [jméno]"</span> → jméno pracovníka<br>
+  <span class="cmd">"další řádek"</span> → přejde na další řádek<br>
+</div>
+
+<!-- SAVE INDICATOR -->
+<div id="save-indicator">✓ Uloženo</div>
+
+<!-- TABS -->
+<div id="tabs">
+  <button class="tab-btn active" onclick="showTab(0)">1. Checklist</button>
+  <button class="tab-btn" onclick="showTab(1)">2. Lidé & vozidla</button>
+  <button class="tab-btn" onclick="showTab(2)">3. Materiál</button>
+  <button class="tab-btn" onclick="showTab(3)">4. Činnosti</button>
+</div>
+
+<div id="sheets-wrapper">
+
+<!-- ======================== SHEET 1: CHECKLIST ======================== -->
+<div class="sheet active" id="sheet-0">
+  <div id="weather-bar">
+    <span class="wl">Počasí:</span>
+    <b id="w-temp">načítám...</b>
+    <span id="w-cloud"></span>
+    <span id="w-rain"></span>
+    <span id="w-wind"></span>
+    <span id="w-source">Open-Meteo.com</span>
+  </div>
+  <table class="cl-table">
+    <colgroup><col style="width:68%"><col style="width:16%"><col style="width:16%"></colgroup>
+    <tr><td colspan="3" class="bg-green txt-bold txt-center" style="font-size:13px;padding:5px;border:var(--border-thick)">
+      CHECKLIST ODJEZD ZE ZAKÁZKY, EVIDENCE A DOCHÁZKA
+    </td></tr>
+    <tr>
+      <td class="bg-gray txt-bold">ZAKÁZKA:&nbsp;<input class="cell-input txt-bold" id="f-zakazka" style="width:68%" placeholder="zadejte zakázku..."></td>
+      <td class="bg-gray txt-bold txt-right">DATUM:</td>
+      <td class="bg-gray txt-bold txt-center" id="f-datum"></td>
+    </tr>
+    <tr><td colspan="3" class="bg-yellow txt-bold txt-center" style="border:var(--border-thick);font-size:12px;padding:5px">
+      PO PŘÍJEZDU NAFOTIT VÝCHOZÍ STAV !!!
+    </td></tr>
+    <tr>
+      <td class="bg-green txt-bold">POLOŽKA</td>
+      <td class="bg-green txt-bold txt-center">POVĚŘEN</td>
+      <td class="bg-green txt-bold txt-center">SPLNĚNO</td>
+    </tr>
+    <tr><td>kontrola vody – vypnuté kohoutky (zazimování pokud je to poslední letošní návštěva)</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov0"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl0"></td></tr>
+    <tr><td>kontrola elektřiny – zajištění proti vodě, odpojení ze zásuvek atd.</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov1"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl1"></td></tr>
+    <tr><td>kontrola strojů ponechaných na stavbě – zajištění proti dešti a krádeži*</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov2"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl2"></td></tr>
+    <tr><td>kontrola nářadí podle soupisu – co jsme přivezli, to odvezeme (vyjma věcí co zůstávají)**</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov3"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl3"></td></tr>
+    <tr><td>kontrola nářadí, zda jsme nezabalili nářadí investora/zákazníka</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov4"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl4"></td></tr>
+    <tr><td colspan="3" class="txt-small txt-italic bg-blue2" style="border:none;padding:1px 4px">
+      *pom. při odjezdu na delší dobu odvézt veškeré nářadí &nbsp;&nbsp; **pom. – zapomenuté nářadí v záhonech a na pozemku
+    </td></tr>
+    <tr><td class="txt-bold">soupis navazujících prací a nářadí pro další výjezd</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov5"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl5"></td></tr>
+    <tr><td class="txt-bold">kontrola správného provedení a dokončení prací, vč. návazností</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov6"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl6"></td></tr>
+    <tr><td>úklid – zameteno, odbahněno, očištěné nářadí</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov7"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl7"></td></tr>
+    <tr><td colspan="3" class="txt-small txt-italic bg-blue2" style="border:none;padding:1px 4px">
+      pozn. i rozpracovanou zakázku opouštět tak, aby vypadala uklizeně
+    </td></tr>
+    <tr><td>pořízení fotodokumentace provedených prací</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov8"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl8"></td></tr>
+    <tr><td>před odjezdem informovat zákazníka o dalším postupu, vždy pozdravit</td>
+      <td class="txt-center"><input class="cell-input txt-center" data-key="pov9"></td>
+      <td class="txt-center"><input type="checkbox" data-key="spl9"></td></tr>
+    <tr><td colspan="3" class="txt-small txt-italic txt-red bg-blue2" style="border:none;padding:1px 4px;font-weight:bold">
+      pozn. KOMUNIKACE JE INDIVIDUÁLNÍ, PŘEDEM SI ZJISTIT PROFIL ZÁKAZNÍKA (AŤ ZBYTEČNĚ NEOBTĚŽUJEME)
+    </td></tr>
+    <tr><td colspan="3" class="txt-small txt-italic txt-red bg-blue2" style="border:none;padding:1px 4px;font-weight:bold">
+      pozn. VŽDY DOKONČIT SOUBOR PRACÍ PŘED ODJEZDEM BEZ OHLEDU NA POČASÍ A ČAS !
+    </td></tr>
+    <tr><td colspan="3" class="bg-green2 txt-bold" style="border:var(--border-thick);padding:4px">
+      DALŠÍ POZNÁMKY K ZAKÁZCE – PŘIPOMÍNKY A POŽADAVKY ZÁKAZNÍKA, INFO K DALŠÍMU POSTUPU
+    </td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-1" placeholder="poznámka..."></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-2"></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-3"></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-4"></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-5"></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-6"></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-7"></td></tr>
+    <tr><td colspan="3"><input class="cell-input" id="note-8"></td></tr>
+    <tr style="height:4px"><td colspan="3" style="border:none"></td></tr>
+    <tr>
+      <td class="bg-gray txt-bold txt-small">BYLA PROVEDENA KONTROLA KVALITY PRÁCE DLE SMĚRNICE</td>
+      <td colspan="2" class="txt-center bg-yellow"><input type="checkbox" data-key="fin0"></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold txt-small">BYL PROVEDEN ZÁPIS DO SERVISNÍ KNIHY U POUŽITÉ MECHANIZACE A PŘEDÁNY INSTRUKCE K SERVISU</td>
+      <td colspan="2" class="txt-center bg-yellow"><input type="checkbox" data-key="fin1"></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold txt-small">CHECKLIST BYL PŘED ODJEZDEM VYTOČEN A ODESLÁN DO ALBA K ZAKÁZCE, PŘÍP. NADŘÍZENÉMU</td>
+      <td colspan="2" class="txt-center bg-yellow"><input type="checkbox" data-key="fin2"></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold txt-small">ODPOVĚDNÁ OSOBA PO VYBALENÍ VOZU ZKONTROLOVALA ŘÁDNÉ UMÍSTĚNÍ NÁŘADÍ VE SKLADU, VČ. OČIŠTĚNÍ</td>
+      <td colspan="2" class="txt-center bg-yellow"><input type="checkbox" data-key="fin3"></td>
+    </tr>
+    <tr>
+      <td class="txt-bold" style="padding-top:6px">Jméno vedoucího:&nbsp;<input class="cell-input txt-bold" id="f-vedouci" style="width:55%" placeholder="..."></td>
+      <td></td>
+      <td class="txt-bold txt-center bg-gray" style="border:var(--border)">PODPIS</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ======================== SHEET 2: LIDÉ & VOZIDLA ======================== -->
+<div class="sheet" id="sheet-1">
+  <table class="cl-table">
+    <colgroup>
+      <col style="width:22%"><col style="width:13%"><col style="width:13%">
+      <col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%">
+    </colgroup>
+    <tr><td colspan="7" class="bg-green txt-bold txt-center" style="font-size:13px;padding:5px;border:var(--border-thick)">
+      LIDÉ A VOZIDLA NA ZAKÁZCE
+    </td></tr>
+    <tr class="bg-blue txt-bold">
+      <td>JMÉNO, řidič</td>
+      <td class="txt-center txt-small">ZAČÁTEK PRAC. DOBY NA FIRMĚ / NÁSTUP DO AUTA **</td>
+      <td class="txt-center txt-small">ČAS PŘÍJEZDU NA ZAKÁZKU</td>
+      <td class="txt-center txt-small">OBĚD OD–DO</td>
+      <td class="txt-center txt-small">KONEC PRACOVNÍ DOBY</td>
+      <td class="txt-center txt-small">POUŽITÍ OSOBNÍ VŮZ KM</td>
+      <td class="txt-center txt-small">PŘÍSPĚVEK DOPRAVA KM</td>
+    </tr>
+    <tbody id="people-body"></tbody>
+    <tr style="height:5px"><td colspan="7" style="border:none"></td></tr>
+    <tr>
+      <td class="bg-gray txt-bold">TYP VOZIDLA</td>
+      <td colspan="6"><input class="cell-input" id="f-vozidlo" placeholder="typ vozidla..."></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold">PŘÍJEZD NA ZAKÁZKU</td>
+      <td colspan="2"><input class="cell-input" id="f-prijezd-voz" placeholder="čas..."></td>
+      <td class="bg-gray txt-bold txt-center">ODJEZD ZE ZAKÁZKY</td>
+      <td colspan="3"><input class="cell-input" id="f-odjezd-voz" placeholder="čas..."></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold">POČET KM</td>
+      <td colspan="6"><input class="cell-input" id="f-km" placeholder="km..."></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold">VOZÍK ANO/NE</td>
+      <td colspan="6"><input class="cell-input" id="f-vozik" placeholder="ano / ne"></td>
+    </tr>
+    <tr>
+      <td class="bg-gray txt-bold">POČASÍ</td>
+      <td colspan="6"><input class="cell-input" id="f-pocasi" placeholder="teplota, oblačnost, srážky, vítr..."></td>
+    </tr>
+    <tr><td colspan="7" class="txt-small txt-italic bg-blue2" style="border:none;padding:1px 4px">
+      pozn. uvádět teplotu, oblačnost, vítr
+    </td></tr>
+    <tr><td colspan="7" class="txt-small txt-italic bg-blue2" style="border:none;padding:1px 4px">
+      * pokud někdo nabírá po cestě na zakázku
+    </td></tr>
+    <tr><td colspan="7" class="txt-small txt-italic bg-blue2" style="border:none;padding:1px 4px">
+      ** začátek pracovní doby se počítá při započetí prací, příchod na firmu 6:50 je rezerva na kávu apod.; práce začíná obvykle v 7:00
+    </td></tr>
+  </table>
+</div>
+
+<!-- ======================== SHEET 3: MATERIÁL ======================== -->
+<div class="sheet" id="sheet-2">
+  <table class="cl-table">
+    <colgroup><col style="width:68%"><col style="width:16%"><col style="width:16%"></colgroup>
+    <tr>
+      <td class="bg-green txt-bold txt-center" style="font-size:13px;padding:5px;border:var(--border-thick)">EVIDENCE MATERIÁLU A MECHANIZACE</td>
+      <td class="bg-gray txt-bold txt-right">DATUM:</td>
+      <td class="bg-gray txt-bold txt-center" id="sheet3-datum"></td>
+    </tr>
+    <tr class="bg-blue txt-bold">
+      <td>SPOTŘEBOVANÝ MATERIÁL A POUŽITÍ STROJŮ</td>
+      <td class="txt-center">JEDNOTKA</td>
+      <td class="txt-center">MNOŽSTVÍ</td>
+    </tr>
+    <tbody id="material-body"></tbody>
+    <tr><td colspan="3" class="bg-gray txt-bold txt-small" style="border:var(--border-thick);padding:3px 4px">
+      PŘÍPRAVA (cesta, zabalení auta, úklid na firmě atd. – veškerá činnost spojená s prací, ale mimo zakázku)
+    </td></tr>
+  </table>
+</div>
+
+<!-- ======================== SHEET 4: ČINNOSTI ======================== -->
+<div class="sheet" id="sheet-3">
+  <table class="cl-table">
+    <colgroup><col style="width:68%"><col style="width:16%"><col style="width:16%"></colgroup>
+    <tr><td colspan="3" class="bg-green txt-bold txt-center" style="font-size:13px;padding:5px;border:var(--border-thick)">
+      EVIDENCE PRACOVNÍCH ČINNOSTÍ
+    </td></tr>
+    <tr class="bg-blue txt-bold">
+      <td>SOUPIS PRACOVNÍCH OPERACÍ NA ZAKÁZCE</td>
+      <td class="txt-center">VÝKON</td>
+      <td class="txt-center">JMÉNO</td>
+    </tr>
+    <tbody id="cinnosti-body"></tbody>
+  </table>
+</div>
+
+</div><!-- /sheets-wrapper -->
+<div class="bottom-space"></div>
+
+<div id="voice-overlay">
+  <div>Diktování: <span id="vof-name">—</span></div>
+  <div id="vof-interim"></div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const MAX_PEOPLE = 16, MAX_MATERIAL = 24, MAX_CINNOSTI = 22;
+const LS_KEY = 'checklist_v2';
+
+// ============================================================
+// STATE
+// ============================================================
+let voiceCurrentField = null;
+let voiceCurrentPerson = -1;
+let voiceMaterialRow = 0;
+let voiceCinnostRow = 0;
+let currentNoteIdx = 1;
+const PERSON_STEPS = ['zacatek','prijezd','obed','konec','km','prispevek'];
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  setDate();
+  buildPeopleRows();
+  buildMaterialRows();
+  buildCinnostiRows();
+  // Clicking any cell makes it the destination of the next final utterance.
+  document.querySelectorAll('.sheet input:not([type=checkbox])').forEach((el,index) => {
+    if (!el.id) el.id='voice-cell-'+index;
+    el.addEventListener('focus',()=>{
+      if (!streamRendering) checkpointSpeech();
+      setVoiceField(el.id, null, false);
+    });
+    el.addEventListener('input',()=>{
+      if (!streamRendering) {previewUndo.delete(el.id);checkpointSpeech();}
+    });
+  });
+  document.querySelectorAll('.sheet input[type=checkbox]').forEach(el=>{
+    el.addEventListener('change',()=>checkpointSpeech());
+  });
+  initVoice();
+  fetchWeather();
+  // Auto-save every 60s
+  setInterval(saveToLocal, 60000);
+  // Load on start
+  loadLastSave(true);
+
+  document.getElementById('f-zakazka').addEventListener('change', e => {
+    if (e.target.value.length > 3) geocodeAndWeather(e.target.value);
+  });
+});
+
+function setDate() {
+  const d = new Date().toLocaleDateString('cs-CZ');
+  document.getElementById('f-datum').textContent = d;
+  const s3 = document.getElementById('sheet3-datum');
+  if (s3) s3.textContent = d;
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function showTab(idx, preserveVoice=false) {
+  if (!preserveVoice) checkpointSpeech();
+  document.querySelectorAll('.sheet').forEach((s,i) => s.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
+  if (!preserveVoice) setVoiceField(firstEmpty(sheetFields(idx)));
+}
+
+// ============================================================
+// BUILD ROWS
+// ============================================================
+function buildPeopleRows() {
+  const tb = document.getElementById('people-body');
+  tb.innerHTML = '';
+  for (let i=0; i<MAX_PEOPLE; i++) {
+    const tr = document.createElement('tr');
+    tr.className = 'people-row';
+    tr.dataset.idx = i;
+    tr.innerHTML = `
+      <td><input class="cell-input" id="p-name-${i}" placeholder="jméno..."></td>
+      <td><input class="cell-input txt-center" id="p-zacatek-${i}" placeholder="7:00"></td>
+      <td><input class="cell-input txt-center" id="p-prijezd-${i}" placeholder="8:00"></td>
+      <td><input class="cell-input txt-center" id="p-obed-${i}" placeholder="11:30-12:00"></td>
+      <td><input class="cell-input txt-center" id="p-konec-${i}" placeholder="15:00"></td>
+      <td><input class="cell-input txt-center" id="p-km-${i}" placeholder="0"></td>
+      <td><input class="cell-input txt-center" id="p-prispevek-${i}" placeholder="0"></td>`;
+    tb.appendChild(tr);
+    document.getElementById(`p-name-${i}`).addEventListener('focus', () => { voiceCurrentPerson = i; });
+  }
+}
+
+function buildMaterialRows() {
+  const tb = document.getElementById('material-body');
+  tb.innerHTML = '';
+  for (let i=0; i<MAX_MATERIAL; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="cell-input" id="m-nazev-${i}"></td>
+      <td><input class="cell-input txt-center" id="m-jed-${i}"></td>
+      <td><input class="cell-input txt-center" id="m-mnoz-${i}"></td>`;
+    tb.appendChild(tr);
+  }
+}
+
+function buildCinnostiRows() {
+  const tb = document.getElementById('cinnosti-body');
+  tb.innerHTML = '';
+  for (let i=0; i<MAX_CINNOSTI; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="cell-input" id="c-nazev-${i}"></td>
+      <td><input class="cell-input txt-center" id="c-vykon-${i}"></td>
+      <td><input class="cell-input txt-center" id="c-jmeno-${i}"></td>`;
+    tb.appendChild(tr);
+  }
+}
+
+// ============================================================
+// LOCALSTORAGE SAVE / LOAD
+// ============================================================
+function gatherFormData() {
+  return withConfirmedSpeech(readFormData);
+}
+
+function readFormData() {
+  const data = {
+    zakazka: v('f-zakazka'), datum: document.getElementById('f-datum').textContent,
+    vedouci: v('f-vedouci'),
+    notes: [], pov: [], spl: [], fin: [],
+    vozidlo: v('f-vozidlo'), prijezdVoz: v('f-prijezd-voz'),
+    odjezdVoz: v('f-odjezd-voz'), km: v('f-km'),
+    vozik: v('f-vozik'), pocasi: v('f-pocasi'),
+    people: [], material: [], cinnosti: []
+  };
+  for (let i=1;i<=8;i++) data.notes.push(v(`note-${i}`));
+  for (let i=0;i<10;i++) {
+    data.pov.push(document.querySelector(`[data-key=pov${i}]`)?.value||'');
+    data.spl.push(document.querySelector(`[data-key=spl${i}]`)?.checked||false);
+  }
+  for (let i=0;i<4;i++) data.fin.push(document.querySelector(`[data-key=fin${i}]`)?.checked||false);
+  for (let i=0;i<MAX_PEOPLE;i++) {
+    data.people.push({
+      name:v(`p-name-${i}`), zacatek:v(`p-zacatek-${i}`), prijezd:v(`p-prijezd-${i}`),
+      obed:v(`p-obed-${i}`), konec:v(`p-konec-${i}`), km:v(`p-km-${i}`), prispevek:v(`p-prispevek-${i}`)
+    });
+  }
+  for (let i=0;i<MAX_MATERIAL;i++) data.material.push({nazev:v(`m-nazev-${i}`),jed:v(`m-jed-${i}`),mnoz:v(`m-mnoz-${i}`)});
+  for (let i=0;i<MAX_CINNOSTI;i++) data.cinnosti.push({nazev:v(`c-nazev-${i}`),vykon:v(`c-vykon-${i}`),jmeno:v(`c-jmeno-${i}`)});
+  return data;
+}
+
+function applyFormData(data) {
+  if (!data) return;
+  checkpointSpeech();
+  sf('f-zakazka', data.zakazka||'');
+  sf('f-vedouci', data.vedouci||'');
+  sf('f-vozidlo', data.vozidlo||'');
+  sf('f-prijezd-voz', data.prijezdVoz||'');
+  sf('f-odjezd-voz', data.odjezdVoz||'');
+  sf('f-km', data.km||'');
+  sf('f-vozik', data.vozik||'');
+  sf('f-pocasi', data.pocasi||'');
+  (data.notes||[]).forEach((n,i) => sf(`note-${i+1}`, n));
+  (data.pov||[]).forEach((p,i) => { const el=document.querySelector(`[data-key=pov${i}]`); if(el) el.value=p; });
+  (data.spl||[]).forEach((s,i) => { const el=document.querySelector(`[data-key=spl${i}]`); if(el) el.checked=s; });
+  (data.fin||[]).forEach((f,i) => { const el=document.querySelector(`[data-key=fin${i}]`); if(el) el.checked=f; });
+  (data.people||[]).forEach((p,i) => {
+    sf(`p-name-${i}`,p.name||''); sf(`p-zacatek-${i}`,p.zacatek||''); sf(`p-prijezd-${i}`,p.prijezd||'');
+    sf(`p-obed-${i}`,p.obed||''); sf(`p-konec-${i}`,p.konec||''); sf(`p-km-${i}`,p.km||''); sf(`p-prispevek-${i}`,p.prispevek||'');
+  });
+  (data.material||[]).forEach((m,i) => { sf(`m-nazev-${i}`,m.nazev||''); sf(`m-jed-${i}`,m.jed||''); sf(`m-mnoz-${i}`,m.mnoz||''); });
+  (data.cinnosti||[]).forEach((c,i) => { sf(`c-nazev-${i}`,c.nazev||''); sf(`c-vykon-${i}`,c.vykon||''); sf(`c-jmeno-${i}`,c.jmeno||''); });
+}
+
+function saveToLocal() {
+  try {
+    const saves = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
+    const entry = { ts: Date.now(), data: gatherFormData() };
+    saves.unshift(entry);
+    if (saves.length > 10) saves.pop(); // keep last 10
+    localStorage.setItem(LS_KEY, JSON.stringify(saves));
+    flashSaved('✓ Uloženo');
+  } catch(e) { flashSaved('⚠ Uložení selhalo'); }
+}
+
+function loadLastSave(silent) {
+  try {
+    const saves = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
+    if (!saves.length) { if (!silent) flashSaved('ℹ Žádná uložená data'); return; }
+    applyFormData(saves[0].data);
+    if (!silent) flashSaved('✓ Načteno: ' + new Date(saves[0].ts).toLocaleString('cs-CZ'));
+  } catch(e) { if (!silent) flashSaved('⚠ Načítání selhalo'); }
+}
+
+function flashSaved(msg) {
+  const el = document.getElementById('save-indicator');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function v(id) { return document.getElementById(id)?.value||''; }
+function sf(id, val) { const el=document.getElementById(id); if(el) el.value=val; }
+
+// ============================================================
+// WEATHER — Open-Meteo (free, no API key)
+// ============================================================
+async function fetchWeather(lat, lon) {
+  try {
+    if (!lat || !lon) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          p => fetchWeatherCoords(p.coords.latitude, p.coords.longitude),
+          () => fetchWeatherCoords(50.08, 14.44)
+        );
+        return;
+      }
+      lat=50.08; lon=14.44;
+    }
+    fetchWeatherCoords(lat, lon);
+  } catch(e) {}
+}
+
+async function fetchWeatherCoords(lat, lon) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,cloudcover,windspeed_10m&wind_speed_unit=ms&timezone=auto`;
+    const r = await fetch(url);
+    const d = await r.json();
+    const c = d.current;
+    const t = `${c.temperature_2m}°C`;
+    const cl = cloudDesc(c.cloudcover);
+    const rain = c.precipitation>0 ? `${c.precipitation}mm srážky` : 'bez srážek';
+    const wind = `vítr ${c.windspeed_10m}m/s`;
+    document.getElementById('w-temp').textContent = '🌡 '+t;
+    document.getElementById('w-cloud').textContent = '☁ '+cl;
+    document.getElementById('w-rain').textContent = '🌧 '+rain;
+    document.getElementById('w-wind').textContent = '💨 '+wind;
+    const pocasiEl = document.getElementById('f-pocasi');
+    if (!pocasiEl.value) pocasiEl.value = `${t}, ${cl}, ${rain}, ${wind}`;
+  } catch(e) { document.getElementById('w-temp').textContent = 'Nedostupné'; }
+}
+
+function cloudDesc(p) {
+  if (p<10) return 'jasno'; if (p<30) return 'skoro jasno';
+  if (p<60) return 'polojasno'; if (p<90) return 'oblačno'; return 'zataženo';
+}
+
+async function geocodeAndWeather(text) {
+  if (!text||text.length<4) return;
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=1`,{headers:{'Accept-Language':'cs'}});
+    const d = await r.json();
+    if (d&&d[0]) {
+      fetchWeatherCoords(parseFloat(d[0].lat), parseFloat(d[0].lon));
+      document.getElementById('w-source').textContent = 'Open-Meteo | '+d[0].display_name.split(',')[0];
+    }
+  } catch(e) {}
+}
+
+// ============================================================
+// VOICE
+// ============================================================
+let recognition = null, isListening = false;
+
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { document.getElementById('mic-status').textContent = 'Hlas nepodporován'; return; }
+  recognition = new SR();
+  recognition.lang = 'cs-CZ';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.onstart = () => {
+    committedResults.clear();
+    speechSession++;
+    speechResultCount=0;
+    isListening = true;
+    document.getElementById('mic-btn').classList.add('listening');
+    document.getElementById('mic-btn').textContent = '🔴';
+    document.getElementById('mic-status').textContent = 'Naslouchám...';
+    document.getElementById('mic-status').classList.add('active');
+  };
+  recognition.onend = () => {
+    if (continuousVoice()) {
+      for (const [key,result] of speechResults) if (!result.final) speechResults.delete(key);
+      renderSpeech(false,!isListening);
+      document.getElementById('speech-history').value=[...speechResults.values()].map(result=>result.text).join(' ');
+    }
+    if (isListening) setTimeout(()=>{ if (isListening) try{recognition.start();}catch(e){} }, 300);
+    else {
+      document.getElementById('mic-btn').classList.remove('listening');
+      document.getElementById('mic-btn').textContent = '🎤';
+      document.getElementById('mic-status').textContent = 'Mikrofon off';
+      document.getElementById('mic-status').classList.remove('active');
+      document.getElementById('voice-overlay').classList.remove('show');
+    }
+  };
+  recognition.onerror = e => { if (e.error!=='no-speech') console.warn(e.error); };
+  recognition.onresult = handleResult;
+  document.getElementById('mic-btn').addEventListener('click', toggleMic);
+}
+
+function toggleMic() {
+  if (!recognition) return;
+  if (isListening) { isListening=false; recognition.stop(); }
+  else { checkpointSpeech(); try { recognition.start(); } catch(e) {} }
+}
+
+// Results are indexed within one recognition session. A final segment is
+// committed once; provisional hypotheses are presentation only.
+const committedResults = new Set();
+
+let speechSession=0;
+let speechResultCount=0;
+let streamRendering=false;
+let speechState=null;
+const speechResults=new Map(); // history only; never replayed into the table
+const speechIgnored=new Set();
+const previewUndo=new Map();
+
+function continuousVoice() {
+  return document.getElementById('continuous-voice').checked;
+}
+
+function clearSpeechPreview() {
+  for (const [id,value] of previewUndo) {
+    const el=document.getElementById(id);
+    if (el) el.value=value;
+  }
+  previewUndo.clear();
+}
+
+function checkpointSpeech() {
+  if (streamRendering) return;
+  clearSpeechPreview();
+  speechState=null;
+  for (let i=0;i<speechResultCount;i++) speechIgnored.add(speechSession+':'+i);
+}
+
+function newSpeechState() {
+  const id=voiceCurrentField||defaultVoiceField();
+  const section=id?.startsWith('p-')?'person':id?.startsWith('m-')?'material':
+    id?.startsWith('c-')?'work':id?.startsWith('note-')?'note':
+    ['f-vozidlo','f-prijezd-voz','f-odjezd-voz','f-km','f-vozik'].includes(id)?'vehicle':'general';
+  return {field:id,section,person:voiceCurrentPerson,row:section==='material'?voiceMaterialRow:voiceCinnostRow,
+    note:currentNoteIdx,buffer:'',original:id?v(id):'',error:''};
+}
+
+function speechValue(id,text) {
+  const value=cleanVoiceValue(text);
+  if (!value) return '';
+  if (/^p-(zacatek|prijezd|obed|konec)-/.test(id)||/^f-(prijezd|odjezd)-voz$/.test(id)) return extractTime(value);
+  if (/^p-(km|prispevek)-/.test(id)||id==='f-km'||/^m-mnoz-/.test(id)) return extractNum(value);
+  return value;
+}
+
+function resolveSpeechValue(state,text,writes) {
+  if(/^p-name-/.test(state.field)) {
+    const name=normalizeVoice(cleanVoiceValue(text));
+    for(let i=0;name&&i<MAX_PEOPLE;i++) {
+      const id='p-name-'+i;
+      const existing=writes.has(id)?writes.get(id):v(id);
+      if(id!==state.field && normalizeVoice(existing)===name) {
+        writes.set(state.field,state.original);
+        state.field=id;
+        state.person=i;
+        state.original=existing;
+        return existing;
+      }
+    }
+  }
+  return speechValue(state.field,text);
+}
+
+function allowedSpeechCommands(state) {
+  const navigation=['nextField','nextRow','nextNote','nextPerson','people'];
+  // Inside notes, ordinary field names are prose, including at the beginning.
+  if (state.section==='note') return navigation;
+  const common=['job','leader','note','people','person','nextPerson','material','work','vehicle','nextField'];
+  if (state.section==='person') return [...common,'name','start','arrival','lunch','end','km','contribution','nextRow'];
+  if (state.section==='material') return [
+    'people','person','nextPerson','material','nextField','unit','quantity','nextRow',
+    ...(/^m-mnoz-/.test(state.field)?['work','vehicle','note','job','leader']:[])
+  ];
+  if (state.section==='work') return [
+    'people','person','nextPerson','work','nextField','performance','name','nextRow',
+    ...(/^c-jmeno-/.test(state.field)?['material','vehicle','note','job','leader']:[])
+  ];
+  if (state.section==='vehicle') return [...common,'vehicleArrival','vehicleDeparture','vehicleKm','trailer','weather','km'];
+  return [...common,'name','weather'];
+}
+
+function speechBoundary(state, provisional=false, flush=false) {
+  const allowed=allowedSpeechCommands(state);
+  const text=state.buffer;
+  const positions=[0,...[...text.matchAll(/\s+/g)].map(m=>m.index+m[0].length)];
+  for (const offset of positions) {
+    const tail=cleanVoiceValue(text.slice(offset));
+    const normalized=normalizeVoice(tail).replace(/\s+/g,' ');
+    const commands=VOICE_COMMANDS.filter(([,command])=>allowed.includes(command));
+    // A multiword keyword may be split even across confirmed speech results.
+    const incomplete=commands.some(([keyword])=>keyword.startsWith(normalized+' ') || keyword.startsWith(normalized) && keyword!==normalized);
+    const found=commands.find(([keyword])=>normalized.startsWith(keyword) &&
+      (normalized.length===keyword.length || /[\s,.:;!?]/.test(normalized[keyword.length])));
+    if (!found && incomplete && normalized) return {offset,pending:true};
+    if (!found) continue;
+    const [keyword,command]=found;
+    const longer=commands.some(([candidate])=>candidate.startsWith(keyword+' ') &&
+      (candidate.startsWith(normalized) || normalized.startsWith(candidate)));
+    if (!provisional && !flush && normalized===keyword && longer) return {offset,pending:true};
+    // Preserve punctuation and casing in the original value.
+    const rawTail=text.slice(offset);
+    const leading=rawTail.length-rawTail.replace(/^[\s,;:.!?]+/,'').length;
+    const keywordMatch=normalizeVoice(rawTail.slice(leading)).match(new RegExp('^'+keyword.split(' ').join('\\s+')));
+    return {offset,length:leading+keywordMatch[0].length,command};
+  }
+  return null;
+}
+
+function speechTarget(state,command,writes) {
+  const value=id=>writes.has(id)?writes.get(id):v(id);
+  const empty=ids=>ids.find(id=>!value(id).trim())||null;
+  const emptyPerson=()=>{
+    for(let i=0;i<MAX_PEOPLE;i++) if(['name',...PERSON_STEPS].every(field=>!value('p-'+field+'-'+i))) return i;
+    return -1;
+  };
+  const simple={job:'f-zakazka',leader:'f-vedouci',vehicle:'f-vozidlo',
+    vehicleArrival:'f-prijezd-voz',vehicleDeparture:'f-odjezd-voz',vehicleKm:'f-km',
+    trailer:'f-vozik',weather:'f-pocasi'};
+  let id=simple[command]||null;
+  if(['people','person','nextPerson'].includes(command) || command==='name'&&state.section!=='work') {
+    const person=emptyPerson();
+    if(person>=0) {state.person=person;id='p-name-'+person;}
+  } else if(command==='name') id='c-jmeno-'+state.row;
+  const personFields={start:'zacatek',arrival:'prijezd',lunch:'obed',end:'konec',km:'km',contribution:'prispevek'};
+  if(personFields[command]) {
+    if(state.section==='vehicle'&&command==='km') id='f-km';
+    else if(state.person>=0) id='p-'+personFields[command]+'-'+state.person;
+  }
+  if(command==='material'||command==='work') {
+    const prefix=command==='material'?'m':'c';
+    const count=prefix==='m'?MAX_MATERIAL:MAX_CINNOSTI;
+    id=empty(Array.from({length:count},(_,i)=>prefix+'-nazev-'+i));
+  }
+  if(command==='unit') id='m-jed-'+state.row;
+  if(command==='quantity') id='m-mnoz-'+state.row;
+  if(command==='performance') id='c-vykon-'+state.row;
+  if(command==='note'||command==='nextNote') {
+    const from=command==='note'?1:state.note+1;
+    id=empty(Array.from({length:Math.max(0,9-from)},(_,i)=>'note-'+(from+i)));
+  }
+  if(command==='nextRow') {
+    if(state.section==='person') {
+      const person=emptyPerson();
+      if(person>=0) {state.person=person;id='p-name-'+person;}
+    } else {
+      const prefix=state.section==='material'?'m':'c';
+      const count=prefix==='m'?MAX_MATERIAL:MAX_CINNOSTI;
+      id=empty(Array.from({length:Math.max(0,count-state.row-1)},(_,i)=>prefix+'-nazev-'+(state.row+1+i)));
+    }
+  }
+  if(command==='nextField') {
+    const source=document.getElementById(state.field);
+    const sheet=source?.closest('.sheet');
+    let ids=sheet?sheetFields(Number(sheet.id.split('-')[1])):[];
+    ids=ids.slice(ids.indexOf(state.field)+1);
+    id=empty(ids);
+  }
+  if(!id || !document.getElementById(id)) return false;
+  state.field=id;
+  state.original=value(id);
+  state.section=id.startsWith('p-')?'person':id.startsWith('m-')?'material':
+    id.startsWith('c-')?'work':id.startsWith('note-')?'note':
+    ['f-vozidlo','f-prijezd-voz','f-odjezd-voz','f-km','f-vozik'].includes(id)?'vehicle':'general';
+  const person=id.match(/^p-.+-(\d+)$/);
+  if(person) state.person=Number(person[1]);
+  const row=id.match(/^[mc]-.+-(\d+)$/);
+  if(row) state.row=Number(row[1]);
+  if(id.startsWith('note-')) state.note=Number(id.split('-')[1]);
+  return true;
+}
+
+// Consume only the open value and newly confirmed text. Completed commands
+// leave the buffer forever. Provisional text runs on a copy of this state.
+function consumeSpeech(state,addition,{provisional=false,flush=false}={}) {
+  const writes=new Map();
+  state.buffer=[state.buffer,addition].filter(Boolean).join(' ');
+  state.error='';
+  let boundary;
+  while((boundary=speechBoundary(state,provisional,flush))) {
+    const prefix=cleanVoiceValue(state.buffer.slice(0,boundary.offset));
+    if(boundary.pending) break;
+    if(prefix&&state.field) {
+      const value=resolveSpeechValue(state,prefix,writes);
+      if(!value) {state.error='Hodnota neodpovídá políčku '+fieldLabel(state.field)+'. Vyberte políčko a zopakujte údaj.';break;}
+      writes.set(state.field,value);
+    }
+    state.buffer=state.buffer.slice(boundary.offset+boundary.length).replace(/^[\s,;:.!?]+/,'');
+    if(!speechTarget(state,boundary.command,writes)) {
+      state.error='Pro tento příkaz není volné políčko.';
+      state.field=null;
+      break;
+    }
+  }
+  let tail=state.buffer;
+  // Do not put an unfinished navigation phrase into the previous value.
+  const pending=speechBoundary(state,provisional,flush);
+  if(pending?.pending) tail=tail.slice(0,pending.offset);
+  if(state.field) {
+    const value=resolveSpeechValue(state,tail,writes);
+    writes.set(state.field,value||state.original);
+    if(tail.trim()&&!value) state.error='Čekám na platný údaj: '+fieldLabel(state.field);
+  }
+  if(flush&&!state.error) state.buffer='';
+  return writes;
+}
+
+function applySpeechWrites(writes,preview=false) {
+  for(const [id,value] of writes) {
+    const el=document.getElementById(id);
+    if(!el) continue;
+    if(preview&&!previewUndo.has(id)) previewUndo.set(id,el.value);
+    if(el.value!==value) el.value=value;
+  }
+}
+
+function renderSpeech(includeInterim=true,flush=false) {
+  clearSpeechPreview();
+  if(!speechState) speechState=newSpeechState();
+  streamRendering=true;
+  try {
+    if(flush) applySpeechWrites(consumeSpeech(speechState,'',{flush:true}));
+    const interim=includeInterim?[...speechResults].filter(([key,r])=>
+      key.startsWith(speechSession+':')&&!speechIgnored.has(key)&&!r.final).map(([,r])=>r.text).join(' '):'';
+    let visible=speechState;
+    if(interim) {
+      visible={...speechState};
+      applySpeechWrites(consumeSpeech(visible,interim,{provisional:true}),true);
+    }
+    setVoiceField(visible.field,null,false);
+    document.getElementById('vof-interim').textContent=visible.error||interim;
+  } finally {streamRendering=false;}
+}
+
+function withConfirmedSpeech(action) {
+  const hadPreview=previewUndo.size>0;
+  clearSpeechPreview();
+  try {return action();}
+  finally {if(hadPreview && continuousVoice()) renderSpeech();}
+}
+
+function handleResult(event) {
+  speechResultCount=event.results.length;
+  if (continuousVoice()) {
+    clearSpeechPreview();
+    if (!speechState) speechState=newSpeechState();
+    // Re-read all results: interim entries can be revised or removed.
+    const prefix=speechSession+':';
+    for (const key of speechResults.keys()) {
+      if (key.startsWith(prefix) && Number(key.slice(prefix.length))>=event.results.length) speechResults.delete(key);
+    }
+    for (let i=0;i<event.results.length;i++) {
+      speechResults.set(prefix+i,{text:event.results[i][0].transcript.trim(),final:event.results[i].isFinal});
+      if (event.results[i].isFinal && !committedResults.has(i)) {
+        committedResults.add(i);
+        if (!speechIgnored.has(prefix+i)) {
+          streamRendering=true;
+          try {applySpeechWrites(consumeSpeech(speechState,event.results[i][0].transcript.trim()));}
+          finally {streamRendering=false;}
+        }
+      }
+    }
+    const history=[...speechResults.values()].map(result=>result.text).join(' ');
+    document.getElementById('speech-history').value=history;
+    document.getElementById('transcript-box').textContent=history||'—';
+    document.getElementById('vof-interim').textContent=[...speechResults.values()].filter(result=>!result.final).map(result=>result.text).join(' ');
+    renderSpeech();
+    return;
+  }
+  const preview = [];
+  const finals = [];
+  for (let i=event.resultIndex; i<event.results.length; i++) {
+    const result = event.results[i];
+    const text = result[0].transcript.trim();
+    if (result.isFinal) {
+      if (!committedResults.has(i)) {
+        committedResults.add(i);
+        finals.push(text);
+      }
+    } else preview.push(text);
+  }
+  document.getElementById('transcript-box').textContent =
+    [...finals,...preview].join(' ') || '—';
+  document.getElementById('vof-interim').textContent = preview.join(' ');
+  finals.forEach(processCmd);
+}
+
+function normalizeVoice(text) {
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+function cleanVoiceValue(text) {
+  return text.trim().replace(/^[,;:.\s]+|[,;.!?\s]+$/g,'').trim();
+}
+
+function fieldLabel(id) {
+  const labels = {
+    'f-zakazka':'Zakázka', 'f-vedouci':'Vedoucí', 'f-vozidlo':'Vozidlo',
+    'f-prijezd-voz':'Příjezd vozidla', 'f-odjezd-voz':'Odjezd vozidla',
+    'f-km':'Počet kilometrů', 'f-vozik':'Vozík', 'f-pocasi':'Počasí'
+  };
+  if (labels[id]) return labels[id];
+  if (id.startsWith('note-')) return 'Poznámka '+id.split('-')[1];
+  const p = id.match(/^p-(.+)-(\d+)$/);
+  if (p) return 'Osoba '+(Number(p[2])+1)+' – '+(p[1]==='name'?'Jméno':stepLabel(p[1]));
+  const m = id.match(/^[mc]-(.+)-(\d+)$/);
+  if (m) return ({nazev:'Název',jed:'Jednotka',mnoz:'Množství',vykon:'Výkon',jmeno:'Jméno'}[m[1]]||m[1])+' – řádek '+(Number(m[2])+1);
+  return 'Pověřen';
+}
+
+function setVoiceField(id, label, focus=true) {
+  voiceCurrentField = id;
+  const el = document.getElementById(id);
+  document.querySelectorAll('.hl').forEach(e=>e.classList.remove('hl'));
+  if (el) {
+    const sheet = el.closest('.sheet');
+    if (sheet) showTab(Number(sheet.id.split('-')[1]), true);
+    const person = id.match(/^p-(.+)-(\d+)$/);
+    voiceCurrentPerson = person ? Number(person[2]) : -1;
+    const row = id.match(/^[mc]-.+-(\d+)$/);
+    if (row && id.startsWith('m-')) voiceMaterialRow=Number(row[1]);
+    if (row && id.startsWith('c-')) voiceCinnostRow=Number(row[1]);
+    if (id.startsWith('note-')) currentNoteIdx=Number(id.split('-')[1]);
+    el.classList.add('hl');
+    if (focus && !streamRendering && document.activeElement!==el) el.focus();
+  }
+  document.getElementById('vof-name').textContent = el ? (label||fieldLabel(id)) : 'Vyberte políčko';
+  document.getElementById('voice-overlay').classList.toggle('show',Boolean(el));
+}
+
+function firstEmpty(ids) {
+  return ids.find(id => {
+    const el=document.getElementById(id);
+    return el && !el.value.trim();
+  }) || null;
+}
+
+function sheetFields(index) {
+  return [...document.querySelectorAll('#sheet-'+index+' input:not([type=checkbox])')].map(el=>el.id);
+}
+
+function nextVoiceField(id) {
+  let ids;
+  if (id==='f-zakazka') ids=['f-vedouci',...sheetFields(1)];
+  else if (id==='f-vedouci') ids=sheetFields(1);
+  else {
+    const el=document.getElementById(id);
+    const sheet=el?.closest('.sheet');
+    const all=sheet ? sheetFields(Number(sheet.id.split('-')[1])) : [];
+    ids=all.slice(all.indexOf(id)+1);
+  }
+  setVoiceField(firstEmpty(ids));
+}
+
+function defaultVoiceField() {
+  const sheet=document.querySelector('.sheet.active');
+  if (!sheet) return null;
+  return firstEmpty(sheetFields(Number(sheet.id.split('-')[1])));
+}
+
+function writeVoiceValue(id, raw) {
+  const el=document.getElementById(id);
+  if (!el) return false;
+  let value=cleanVoiceValue(raw);
+  if (!value) { setVoiceField(id); return false; }
+  if (/^p-(zacatek|prijezd|obed|konec)-/.test(id) || /^f-(prijezd|odjezd)-voz$/.test(id)) {
+    value=extractTime(value);
+    // Invalid input keeps the intended target selected for a repeated value.
+    if (!value) { setVoiceField(id); return false; }
+  } else if (/^p-(km|prispevek)-/.test(id) || id==='f-km' || /^m-mnoz-/.test(id)) {
+    value=extractNum(value);
+    if (!value) { setVoiceField(id); return false; }
+  }
+  el.value=value;
+  if (!streamRendering) {
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    if (id==='f-zakazka') geocodeAndWeather(value);
+    nextVoiceField(id);
+  }
+  return true;
+}
+
+// Prefix commands have real word boundaries: "auto" must not eat "automat".
+// Longest commands go first (e.g. příjezd vozidla before příjezd).
+const VOICE_COMMANDS = [
+  ['prijezd vozidla','vehicleArrival'], ['pocet kilometru','vehicleKm'],
+  ['pocet km','vehicleKm'], ['dalsi poznamka','nextNote'], ['dalsi poznamky','nextNote'],
+  ['dalsi osoba','nextPerson'], ['dalsi clovek','nextPerson'], ['dalsi radek','nextRow'],
+  ['dalsi policko','nextField'], ['dalsi bunka','nextField'],
+  ['jmeno vedouciho','leader'], ['jmeno pracovnika','name'],
+  ['zacatek prace','start'], ['zacatek pracovni doby','start'],
+  ['konec prace','end'], ['konec pracovni doby','end'],
+  ['zakazka','job'], ['vedouci','leader'], ['poznamka','note'], ['poznamky','note'],
+  ['material','material'], ['jednotka','unit'], ['mnozstvi','quantity'],
+  ['prace','work'], ['cinnost','work'], ['cinnosti','work'], ['vykon','performance'],
+  ['vozidlo','vehicle'], ['auto','vehicle'], ['odjezd','vehicleDeparture'],
+  ['kilometry','km'], ['kilometru','km'], ['km','km'], ['prispevek','contribution'],
+  ['vozik','trailer'], ['pocasi','weather'], ['jmeno','name'], ['osoba','person'],
+  ['lide','people'], ['zacatek','start'], ['prijezd','arrival'], ['obed','lunch'], ['konec','end']
+].sort((a,b)=>b[0].length-a[0].length);
+
+function commandAtStart(raw) {
+  const text=cleanVoiceValue(raw);
+  const normalized=normalizeVoice(text);
+  for (const [keyword,command] of VOICE_COMMANDS) {
+    if (normalized.startsWith(keyword) &&
+        (normalized.length===keyword.length || /[\s,.:;!?]/.test(normalized[keyword.length]))) {
+      return {command, value:cleanVoiceValue(text.slice(keyword.length))};
+    }
+  }
+  return null;
+}
+
+function processCmd(raw) {
+  const text=cleanVoiceValue(raw);
+  if (!text) return;
+  const parsed=commandAtStart(text);
+  if (!parsed) {
+    if (streamRendering) {
+      const words=/\s+/g;
+      let boundary;
+      while ((boundary=words.exec(text))) {
+        const tail=text.slice(boundary.index+boundary[0].length);
+        if (commandAtStart(tail)) {
+          const id=voiceCurrentField||defaultVoiceField();
+          if (id) writeVoiceValue(id,text.slice(0,boundary.index));
+          processCmd(tail);
+          return;
+        }
+      }
+    }
+    if (document.querySelector('.sheet.active')?.id==='sheet-1') {
+      const person=matchPersonName(text);
+      if (person>=0) { setVoiceField('p-name-'+person); nextVoiceField('p-name-'+person); return; }
+    }
+    // A standalone value after "vedoucí" / "začátek", or after a click.
+    const id=voiceCurrentField || defaultVoiceField();
+    if (id) {if (streamRendering) setVoiceField(id); writeVoiceValue(id,text);}
+    return;
+  }
+
+  // Recognition may return several commands in one final segment. In free
+  // text, require punctuation before the next command so ordinary sentences
+  // such as "poznámka práce hotová" remain intact.
+  const freeText=['job','note','nextNote','work','material','weather','vehicle'].includes(parsed.command);
+  const pattern=freeText && !streamRendering ? /[;.!?]\s+/g : /[,;.!?]?\s+/g;
+  let match;
+  while ((match=pattern.exec(parsed.value))) {
+    const tail=parsed.value.slice(match.index+match[0].length);
+    const next=commandAtStart(tail);
+    // Notes remain prose unless an explicit navigation phrase is spoken.
+    if (next && (!streamRendering || !['note','nextNote'].includes(parsed.command) ||
+        ['nextNote','nextField','nextPerson','people'].includes(next.command))) {
+      executeVoiceCommand(parsed.command,cleanVoiceValue(parsed.value.slice(0,match.index)));
+      processCmd(tail);
+      return;
+    }
+  }
+  executeVoiceCommand(parsed.command,parsed.value);
+}
+
+function activePerson() {
+  if (voiceCurrentPerson>=0) return voiceCurrentPerson;
+  const idx=findOrCreatePerson('');
+  return idx;
+}
+
+function selectPerson(name='', forceNew=false) {
+  const idx=forceNew ? firstEmptyPerson() : findOrCreatePerson(name);
+  if (idx<0) return; // Never wrap around and overwrite a full table.
+  const id='p-name-'+idx;
+  setVoiceField(id);
+  if (name) {
+    const existing=document.getElementById(id).value;
+    if (existing && normalizeVoice(existing)===normalizeVoice(name)) nextVoiceField(id);
+    else writeVoiceValue(id,name);
+  }
+}
+
+function executeVoiceCommand(command, value) {
+  const simple={
+    job:'f-zakazka',leader:'f-vedouci',vehicle:'f-vozidlo',
+    vehicleArrival:'f-prijezd-voz',vehicleDeparture:'f-odjezd-voz',
+    vehicleKm:'f-km',trailer:'f-vozik',weather:'f-pocasi'
+  };
+  const write=(id)=>{setVoiceField(id); if(value) writeVoiceValue(id,value);};
+  if (simple[command]) { write(simple[command]); return; }
+  const currentSheet=document.querySelector('.sheet.active')?.id;
+  if (command==='nextField') {
+    if (voiceCurrentField) nextVoiceField(voiceCurrentField);
+    if (value && voiceCurrentField) writeVoiceValue(voiceCurrentField,value);
+    return;
+  }
+  if (command==='people') { selectPerson(value); return; }
+  if (command==='person' || command==='nextPerson') { selectPerson(value,command==='nextPerson'); return; }
+  if (command==='name') {
+    if (currentSheet==='sheet-3') write('c-jmeno-'+voiceCinnostRow);
+    else selectPerson(value);
+    return;
+  }
+  if (command==='note' || command==='nextNote') {
+    const start=command==='nextNote' ? currentNoteIdx : 1;
+    const id=firstEmpty(Array.from({length:Math.max(0,9-start)},(_,i)=>'note-'+(start+i)));
+    if (id) write(id);
+    return;
+  }
+  if (command==='material' || command==='work') {
+    const prefix=command==='material'?'m':'c';
+    const count=prefix==='m'?MAX_MATERIAL:MAX_CINNOSTI;
+    const id=firstEmpty(Array.from({length:count},(_,i)=>prefix+'-nazev-'+i));
+    if (id) write(id);
+    return;
+  }
+  if (command==='nextRow') {
+    if (currentSheet==='sheet-1') { selectPerson(value,true); return; }
+    if (currentSheet==='sheet-2' || currentSheet==='sheet-3') {
+      const prefix=currentSheet==='sheet-2'?'m':'c';
+      const currentRow=prefix==='m'?voiceMaterialRow:voiceCinnostRow;
+      const currentName=prefix+'-nazev-'+currentRow;
+      const row=voiceCurrentField===currentName && !v(currentName) ? currentRow : currentRow+1;
+      const count=prefix==='m'?MAX_MATERIAL:MAX_CINNOSTI;
+      const id=firstEmpty(Array.from({length:Math.max(0,count-row)},(_,i)=>prefix+'-nazev-'+(row+i)));
+      if (id) write(id);
+    }
+    return;
+  }
+  if (command==='unit' || command==='quantity') {
+    if (currentSheet==='sheet-2') write('m-'+(command==='unit'?'jed':'mnoz')+'-'+voiceMaterialRow);
+    return;
+  }
+  if (command==='performance') {
+    if (currentSheet==='sheet-3') write('c-vykon-'+voiceCinnostRow);
+    return;
+  }
+  const personFields={start:'zacatek',arrival:'prijezd',lunch:'obed',end:'konec',km:'km',contribution:'prispevek'};
+  if (personFields[command]) {
+    if (command==='km' && currentSheet!=='sheet-1') { write('f-km'); return; }
+    const idx=activePerson();
+    if (idx>=0) write('p-'+personFields[command]+'-'+idx);
+  }
+}
+
+function stepLabel(s) {
+  return {zacatek:'Začátek',prijezd:'Příjezd',obed:'Oběd',konec:'Konec',km:'KM',prispevek:'Příspěvek'}[s]||s;
+}
+
+const CZECH_NUMBERS = {
+  nula:0,jedna:1,jednu:1,jedne:1,jeden:1,dve:2,dva:2,tri:3,ctyri:4,pet:5,sest:6,sedm:7,osm:8,devet:9,
+  deset:10,jedenact:11,jedenacti:11,dvanact:12,dvanacti:12,trinact:13,ctrnact:14,patnact:15,
+  sestnact:16,sedmnact:17,osmnact:18,devatenact:19,dvacet:20,tricet:30,triceti:30,ctyricet:40,
+  padesat:50,sedesat:60,sedmdesat:70,osmdesat:80,devadesat:90,sto:100
+};
+
+function numberTokens(text) {
+  const words=text.trim().split(/\s+/);
+  if (!words.length || words.some(w=>!Object.prototype.hasOwnProperty.call(CZECH_NUMBERS,w) && !/^\d+$/.test(w))) return null;
+  return words.map(w=>/^\d+$/.test(w)?Number(w):CZECH_NUMBERS[w]);
+}
+
+function extractTime(text) {
+  let normalized=normalizeVoice(cleanVoiceValue(text))
+    .replace(/^(?:zacatek(?: prace)?|prijezd vozidla|prijezd|obed|konec(?: prace)?|odjezd)\b[\s:,-]*/,'')
+    .replace(/^od\s+/,'').trim();
+  const range=normalized.split(/\s+(?:az|do)\s+|\s*[-–—]\s*/);
+  if (range.length>1) {
+    if (range.length!==2) return '';
+    const from=parseSingleTime(range[0]),to=parseSingleTime(range[1]);
+    return from && to ? from+'–'+to : '';
+  }
+  return parseSingleTime(normalized);
+}
+
+function parseSingleTime(value) {
+  let text=cleanVoiceValue(value);
+  const format=(h,m=0)=>Number.isInteger(h)&&Number.isInteger(m)&&h>=0&&h<=23&&m>=0&&m<=59
+    ? h+':'+String(m).padStart(2,'0') : '';
+  let match=text.match(/^(\d{1,2})\s*[:.]\s*(\d{1,2})$/);
+  if (match) return format(Number(match[1]),Number(match[2]));
+  const ordinal={jedne:1,druhe:2,treti:3,ctvrte:4,pate:5,seste:6,sedme:7,osme:8,devate:9,desate:10,jedenacte:11,dvanacte:12};
+  match=text.match(/^pul\s+(\w+)$/);
+  if (match) return ordinal[match[1]] ? format((ordinal[match[1]]+10)%12+1,30) : '';
+  match=text.match(/^(ctvrt|tri ctvrte)\s+na\s+(\w+)$/);
+  if (match) {
+    const hour=CZECH_NUMBERS[match[2]] || Number(match[2]);
+    return hour>=1 && hour<=12 ? format((hour+10)%12+1,match[1]==='ctvrt'?15:45) : '';
+  }
+  text=text.replace(/\b(?:hodin|hodina|hodiny|hodinu|hod|h|minut|minuty|minuta)\b/g,' ').replace(/\s+/g,' ').trim();
+  const values=numberTokens(text);
+  if (!values || !values.length) return '';
+  let hour=values.shift();
+  if (hour===20 && values.length && values[0]>=1 && values[0]<=3) hour+=values.shift();
+  let minute=0;
+  if (values.length===1) minute=values[0];
+  else if (values.length===2 && values[0]===0 && values[1]>=0 && values[1]<10) minute=values[1];
+  else if (values.length===2 && values[0]>=20 && values[0]<=50 && values[0]%10===0 && values[1]>=1 && values[1]<=9) minute=values[0]+values[1];
+  else if (values.length) return '';
+  return format(hour,minute);
+}
+
+function extractNum(text) {
+  const normalized=normalizeVoice(cleanVoiceValue(text)).replace(/\s*(?:km|kilometru|kilometry)$/,'').trim();
+  if (/^\d+(?:[.,]\d+)?$/.test(normalized)) return normalized.replace(',','.');
+  const values=numberTokens(normalized);
+  if (!values) return '';
+  if (values.length===1) return String(values[0]);
+  if (values.length===2 && values[0]>=20 && values[0]%10===0 && values[1]<10) return String(values[0]+values[1]);
+  if (values.length===2 && values[0]===100) return String(100+values[1]);
+  return '';
+}
+
+function firstEmptyPerson() {
+  // Partially filled rows also count as occupied.
+  for (let i=0;i<MAX_PEOPLE;i++) {
+    if (['name',...PERSON_STEPS].every(field=>!v('p-'+field+'-'+i))) return i;
+  }
+  return -1;
+}
+
+function findOrCreatePerson(name) {
+  const existing=matchPersonName(name);
+  return existing>=0 ? existing : firstEmptyPerson();
+}
+
+function matchPersonName(text) {
+  const normalized=normalizeVoice(cleanVoiceValue(text));
+  if (!normalized) return -1;
+  for (let i=0;i<MAX_PEOPLE;i++) {
+    if (normalizeVoice(v('p-name-'+i))===normalized) return i;
+  }
+  return -1;
+}
+
+// ============================================================
+// HELP
+// ============================================================
+function toggleHelp() { document.getElementById('help-panel').classList.toggle('show'); }
+
+// ============================================================
+// EXCEL EXPORT — formatted with cell styles
+// ============================================================
+function exportExcel() {
+  return withConfirmedSpeech(exportExcelData);
+}
+
+function exportExcelData() {
+  const wb = XLSX.utils.book_new();
+
+  // ---- SHEET 1: Checklist ----
+  const rows1 = [
+    [{v:'CHECKLIST ODJEZD ZE ZAKÁZKY, EVIDENCE A DOCHÁZKA',s:{font:{bold:true,sz:14},fill:{fgColor:{rgb:'92D050'}},alignment:{horizontal:'center'}}},'',''],
+    [{v:'ZAKÁZKA: '+v('f-zakazka'),s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},{v:'DATUM:',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}},alignment:{horizontal:'right'}}},{v:document.getElementById('f-datum').textContent,s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}},alignment:{horizontal:'center'}}}],
+    [{v:'PO PŘÍJEZDU NAFOTIT VÝCHOZÍ STAV !!!',s:{font:{bold:true,sz:12},fill:{fgColor:{rgb:'FFFF00'}},alignment:{horizontal:'center'}}},'',''],
+    [{v:'POLOŽKA',s:ghdr()},{v:'POVĚŘEN',s:ghdr()},{v:'SPLNĚNO',s:ghdr()}],
+  ];
+  const checkRows = [
+    'kontrola vody – vypnuté kohoutky (zazimování pokud je to poslední letošní návštěva)',
+    'kontrola elektřiny – zajištění proti vodě, odpojení ze zásuvek atd.',
+    'kontrola strojů ponechaných na stavbě – zajištění proti dešti a krádeži*',
+    'kontrola nářadí podle soupisu – co jsme přivezli, to odvezeme (vyjma věcí co zůstávají)**',
+    'kontrola nářadí, zda jsme nezabalili nářadí investora/zákazníka',
+    'soupis navazujících prací a nářadí pro další výjezd',
+    'kontrola správného provedení a dokončení prací, vč. návazností',
+    'úklid – zameteno, odbahněno, očištěné nářadí',
+    'pořízení fotodokumentace provedených prací',
+    'před odjezdem informovat zákazníka o dalším postupu, vždy pozdravit',
+  ];
+  checkRows.forEach((label,i) => {
+    const pov = document.querySelector(`[data-key=pov${i}]`)?.value||'';
+    const spl = document.querySelector(`[data-key=spl${i}]`)?.checked ? '✓' : '';
+    rows1.push([{v:label},{v:pov,s:{alignment:{horizontal:'center'}}},{v:spl,s:{alignment:{horizontal:'center'}}}]);
+  });
+  rows1.push([{v:'DALŠÍ POZNÁMKY K ZAKÁZCE',s:{font:{bold:true},fill:{fgColor:{rgb:'81D41A'}},alignment:{horizontal:'center'}}},'','']);
+  for (let i=1;i<=8;i++) { const n=v(`note-${i}`); if(n) rows1.push([{v:n},'','']); }
+  rows1.push(['','','']);
+  const finLabels = [
+    'BYLA PROVEDENA KONTROLA KVALITY PRÁCE DLE SMĚRNICE',
+    'BYL PROVEDEN ZÁPIS DO SERVISNÍ KNIHY',
+    'CHECKLIST BYL PŘED ODJEZDEM VYTOČEN A ODESLÁN',
+    'ODPOVĚDNÁ OSOBA ZKONTROLOVALA NÁŘADÍ VE SKLADU',
+  ];
+  finLabels.forEach((lbl,i) => {
+    const chk = document.querySelector(`[data-key=fin${i}]`)?.checked ? '✓' : '';
+    rows1.push([{v:lbl,s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},{v:''},{v:chk,s:{fill:{fgColor:{rgb:'FFFF00'}},alignment:{horizontal:'center'}}}]);
+  });
+  rows1.push([{v:'Jméno vedoucího: '+v('f-vedouci'),s:{font:{bold:true}}},'',{v:'PODPIS',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}},alignment:{horizontal:'center'}}}]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
+  ws1['!cols'] = [{wch:60},{wch:16},{wch:16}];
+  ws1['!merges'] = [{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:0}},{s:{r:2,c:0},e:{r:2,c:2}},{s:{r:3,c:0},e:{r:3,c:0}}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Checklist odjezd');
+
+  // ---- SHEET 2: Lidé a vozidla ----
+  const rows2 = [
+    [{v:'LIDÉ A VOZIDLA NA ZAKÁZCE',s:{font:{bold:true,sz:13},fill:{fgColor:{rgb:'92D050'}},alignment:{horizontal:'center'}}},'','','','','',''],
+    [{v:'JMÉNO, řidič',s:ghdr()},{v:'ZAČÁTEK PRAC. DOBY',s:ghdr()},{v:'PŘÍJEZD NA ZAKÁZKU',s:ghdr()},{v:'OBĚD OD-DO',s:ghdr()},{v:'KONEC PRAC. DOBY',s:ghdr()},{v:'OSOBNÍ VŮZ KM',s:ghdr()},{v:'PŘÍSPĚVEK KM',s:ghdr()}],
+  ];
+  for (let i=0;i<MAX_PEOPLE;i++) {
+    const name=v(`p-name-${i}`);
+    if (!name && PERSON_STEPS.every(field=>!v('p-'+field+'-'+i))) continue;
+    rows2.push([name,v(`p-zacatek-${i}`),v(`p-prijezd-${i}`),v(`p-obed-${i}`),v(`p-konec-${i}`),v(`p-km-${i}`),v(`p-prispevek-${i}`)]);
+  }
+  rows2.push(['','','','','','','']);
+  rows2.push([{v:'TYP VOZIDLA',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},v('f-vozidlo'),'','','','','']);
+  rows2.push([{v:'PŘÍJEZD NA ZAKÁZKU',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},v('f-prijezd-voz'),'',{v:'ODJEZD ZE ZAKÁZKY',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},v('f-odjezd-voz'),'','']);
+  rows2.push([{v:'POČET KM',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},v('f-km'),'','','','','']);
+  rows2.push([{v:'VOZÍK ANO/NE',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},v('f-vozik'),'','','','','']);
+  rows2.push([{v:'POČASÍ',s:{font:{bold:true},fill:{fgColor:{rgb:'D9D9D9'}}}},v('f-pocasi'),'','','','','']);
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  ws2['!cols'] = [{wch:22},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:6}}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Lidé a vozidla');
+
+  // ---- SHEET 3: Materiál ----
+  const rows3 = [
+    [{v:'EVIDENCE MATERIÁLU A MECHANIZACE',s:{font:{bold:true,sz:13},fill:{fgColor:{rgb:'92D050'}},alignment:{horizontal:'center'}}},{v:'DATUM:'},{v:document.getElementById('f-datum').textContent}],
+    [{v:'SPOTŘEBOVANÝ MATERIÁL A POUŽITÍ STROJŮ',s:ghdr()},{v:'JEDNOTKA',s:ghdr()},{v:'MNOŽSTVÍ',s:ghdr()}],
+  ];
+  for (let i=0;i<MAX_MATERIAL;i++) {
+    const n=v(`m-nazev-${i}`),j=v(`m-jed-${i}`),m=v(`m-mnoz-${i}`);
+    rows3.push([n,j,m]);
+  }
+  const ws3 = XLSX.utils.aoa_to_sheet(rows3);
+  ws3['!cols'] = [{wch:60},{wch:16},{wch:16}];
+  ws3['!merges'] = [{s:{r:0,c:0},e:{r:0,c:0}}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Materiál');
+
+  // ---- SHEET 4: Činnosti ----
+  const rows4 = [
+    [{v:'EVIDENCE PRACOVNÍCH ČINNOSTÍ',s:{font:{bold:true,sz:13},fill:{fgColor:{rgb:'92D050'}},alignment:{horizontal:'center'}}},'',''],
+    [{v:'SOUPIS PRACOVNÍCH OPERACÍ NA ZAKÁZCE',s:ghdr()},{v:'VÝKON',s:ghdr()},{v:'JMÉNO',s:ghdr()}],
+  ];
+  for (let i=0;i<MAX_CINNOSTI;i++) {
+    const n=v(`c-nazev-${i}`),vk=v(`c-vykon-${i}`),j=v(`c-jmeno-${i}`);
+    rows4.push([n,vk,j]);
+  }
+  const ws4 = XLSX.utils.aoa_to_sheet(rows4);
+  ws4['!cols'] = [{wch:60},{wch:16},{wch:16}];
+  ws4['!merges'] = [{s:{r:0,c:0},e:{r:0,c:2}}];
+  XLSX.utils.book_append_sheet(wb, ws4, 'Pracovní činnosti');
+
+  const zakazka = v('f-zakazka')||'export';
+  const datum = new Date().toLocaleDateString('cs-CZ').replace(/\./g,'-');
+  XLSX.writeFile(wb, `checklist_${zakazka}_${datum}.xlsx`);
+}
+
+function ghdr() { return {font:{bold:true},fill:{fgColor:{rgb:'B8D4E8'}},alignment:{horizontal:'center'}}; }
+
+// ============================================================
+// PRINT — landscape, 2 sheets per page
+// ============================================================
+function printableSheet(id) {
+  return withConfirmedSpeech(()=>printableSheetData(id));
+}
+
+function printableSheetData(id) {
+  const source = document.getElementById(id);
+  const clone = source.cloneNode(true);
+  const sourceInputs = source.querySelectorAll('input');
+  const clonedInputs = clone.querySelectorAll('input');
+
+  clonedInputs.forEach((input,index) => {
+    const current = sourceInputs[index];
+    const value = document.createElement('span');
+    value.className = `${input.className||''} print-value`;
+    value.style.cssText = input.style.cssText;
+    if (current.type==='checkbox') {
+      value.classList.add('print-checkbox');
+      value.textContent = current.checked ? '✓' : '☐';
+    } else {
+      // textContent keeps manually entered and dictated data safe and ensures
+      // that the live value, rather than the HTML placeholder, is printed.
+      value.textContent = current.value;
+    }
+    input.replaceWith(value);
+  });
+  return clone.innerHTML;
+}
+
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = value;
+  return div.innerHTML;
+}
+
+function printSheets() {
+  const printWin = window.open('', '_blank');
+  if (!printWin) return;
+  const zakazka = escapeHtml(v('f-zakazka')||'Zakázka');
+  const datum = escapeHtml(document.getElementById('f-datum').textContent);
+
+  const sheet0 = printableSheet('sheet-0');
+  const sheet1 = printableSheet('sheet-1');
+  const sheet2 = printableSheet('sheet-2');
+  const sheet3 = printableSheet('sheet-3');
+
+  printWin.document.write(`<!DOCTYPE html><html lang="cs"><head>
+  <meta charset="UTF-8">
+  <title>Checklist – ${zakazka} – ${datum}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Calibri',Arial,sans-serif;font-size:9px;color:#000;}
+    @page{size:A4 landscape;margin:6mm;}
+    .print-page{display:flex;gap:5mm;width:100%;page-break-after:always;}
+    .print-page:last-child{page-break-after:avoid;}
+    .half{flex:1;min-width:0;border:1px solid #000;padding:2mm;}
+    .cl-table{width:100%;border-collapse:collapse;font-size:8px;}
+    .cl-table td,.cl-table th{border:1px solid #000;padding:1px 3px;vertical-align:middle;line-height:1.2;}
+    .cell-input{width:100%;border:none;background:transparent;font-size:8px;}
+    .print-value{display:inline-block;min-height:10px;white-space:pre-wrap;overflow-wrap:anywhere;}
+    .print-checkbox{font-size:11px;font-weight:bold;text-align:center;}
+    input[type=checkbox]{width:12px;height:12px;}
+    .bg-green{background:#92d050!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .bg-green2{background:#81d41a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .bg-yellow{background:#ffff00!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .bg-gray{background:#d9d9d9!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .bg-blue{background:#b8d4e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .bg-blue2{background:#d6e4f0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .bg-red{background:#ff0000!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .txt-bold{font-weight:bold;} .txt-center{text-align:center;} .txt-right{text-align:right;}
+    .txt-small{font-size:7px;} .txt-italic{font-style:italic;} .txt-red{color:#f00;}
+    #weather-bar{display:none!important;}
+    .page-title{font-size:10px;font-weight:bold;text-align:center;padding:2mm 0 1mm;background:#92d050;margin-bottom:2mm;}
+  </style></head><body>
+  <div class="print-page">
+    <div class="half"><div class="page-title">CHECKLIST ODJEZD – ${zakazka} – ${datum}</div>${sheet0}</div>
+    <div class="half"><div class="page-title">LIDÉ A VOZIDLA – ${zakazka} – ${datum}</div>${sheet1}</div>
+  </div>
+  <div class="print-page">
+    <div class="half"><div class="page-title">MATERIÁL – ${zakazka} – ${datum}</div>${sheet2}</div>
+    <div class="half"><div class="page-title">PRACOVNÍ ČINNOSTI – ${zakazka} – ${datum}</div>${sheet3}</div>
+  </div>
+  <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),1000);}<\/script>
+  </body></html>`);
+  printWin.document.close();
+}
+</script>
+</body>
+</html>
