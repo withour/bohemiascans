@@ -189,7 +189,7 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
   Vypnutím souvislého režimu obnovíte automatický posun po dokončené větě.<br><br>
   V poznámkách jsou názvy polí běžným textem. Přechod určete slovy
   „další políčko“ nebo „další poznámka“. U materiálu nejprve určete
-  „materiál“, potom „jednotka“ a „množství“. Do tisku a uložení vstupují
+  „materiál“, potom „množství deset kilogramů“. Jednotka se doplní sama. Do tisku a uložení vstupují
   potvrzené údaje; průběžný náhled se ještě může změnit.<br><br>
   <details><summary>Přepis diktování</summary>
     <textarea id="speech-history" readonly aria-label="Přepis diktování"
@@ -221,8 +221,8 @@ input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
   <br>
   <b>Materiál (záložka 3):</b><br>
   <span class="cmd">"materiál [název]"</span> → nový řádek materiálu<br>
-  <span class="cmd">"jednotka [jed]"</span> → jednotka<br>
-  <span class="cmd">"množství [číslo]"</span> → množství<br>
+  Jednotka je pouze pro čtení; vyplní se z množství.<br>
+  <span class="cmd">"množství [číslo a jednotka]"</span> → např. „10 kilo“ zapíše 10 a kg<br>
   <span class="cmd">"další řádek"</span> → přejde na další řádek<br>
   <br>
   <b>Pracovní činnosti (záložka 4):</b><br>
@@ -477,7 +477,7 @@ window.addEventListener('DOMContentLoaded', () => {
   buildMaterialRows();
   buildCinnostiRows();
   // Clicking any cell makes it the destination of the next final utterance.
-  document.querySelectorAll('.sheet input:not([type=checkbox])').forEach((el,index) => {
+  document.querySelectorAll('.sheet input:not([type=checkbox]):not([readonly])').forEach((el,index) => {
     if (!el.id) el.id='voice-cell-'+index;
     el.addEventListener('focus',()=>{
       if (!streamRendering) checkpointSpeech();
@@ -489,6 +489,15 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelectorAll('.sheet input[type=checkbox]').forEach(el=>{
     el.addEventListener('change',()=>checkpointSpeech());
+  });
+  document.querySelectorAll('#material-body input[id^="m-mnoz-"]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const parsed=parseMaterialQuantity(el.value);
+      if (!parsed) return;
+      el.value=parsed.quantity;
+      if (parsed.unit) document.getElementById(el.id.replace('m-mnoz-','m-jed-')).value=parsed.unit;
+      checkpointSpeech();
+    });
   });
   initVoice();
   fetchWeather();
@@ -549,7 +558,7 @@ function buildMaterialRows() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><input class="cell-input" id="m-nazev-${i}"></td>
-      <td><input class="cell-input txt-center" id="m-jed-${i}"></td>
+      <td><input class="cell-input txt-center" id="m-jed-${i}" readonly tabindex="-1" aria-label="Jednotka – vyplní se z množství"></td>
       <td><input class="cell-input txt-center" id="m-mnoz-${i}"></td>`;
     tb.appendChild(tr);
   }
@@ -795,18 +804,26 @@ function newSpeechState() {
     id?.startsWith('c-')?'work':id?.startsWith('note-')?'note':
     ['f-vozidlo','f-prijezd-voz','f-odjezd-voz','f-km','f-vozik'].includes(id)?'vehicle':'general';
   return {field:id,section,person:voiceCurrentPerson,row:section==='material'?voiceMaterialRow:voiceCinnostRow,
-    note:currentNoteIdx,buffer:'',original:id?v(id):'',error:''};
+    note:currentNoteIdx,buffer:'',original:id?v(id):'',
+    originalUnit:id?.startsWith('m-mnoz-')?v(id.replace('m-mnoz-','m-jed-')):null,error:''};
 }
 
 function speechValue(id,text) {
   const value=cleanVoiceValue(text);
   if (!value) return '';
   if (/^p-(zacatek|prijezd|obed|konec)-/.test(id)||/^f-(prijezd|odjezd)-voz$/.test(id)) return extractTime(value);
-  if (/^p-(km|prispevek)-/.test(id)||id==='f-km'||/^m-mnoz-/.test(id)) return extractNum(value);
+  if (/^m-mnoz-/.test(id)) return parseMaterialQuantity(value)?.quantity||'';
+  if (/^p-(km|prispevek)-/.test(id)||id==='f-km') return extractNum(value);
   return value;
 }
 
 function resolveSpeechValue(state,text,writes) {
+  if (/^m-mnoz-/.test(state.field)) {
+    const parsed=parseMaterialQuantity(text);
+    const unitId=state.field.replace('m-mnoz-','m-jed-');
+    writes.set(unitId,parsed?.unit||state.originalUnit||'');
+    return parsed?.quantity||'';
+  }
   if(/^p-name-/.test(state.field)) {
     const name=normalizeVoice(cleanVoiceValue(text));
     for(let i=0;name&&i<MAX_PEOPLE;i++) {
@@ -831,7 +848,7 @@ function allowedSpeechCommands(state) {
   const common=['job','leader','note','people','person','nextPerson','material','work','vehicle','nextField'];
   if (state.section==='person') return [...common,'name','start','arrival','lunch','end','km','contribution','nextRow'];
   if (state.section==='material') return [
-    'people','person','nextPerson','material','nextField','unit','quantity','nextRow',
+    'people','person','nextPerson','material','nextField','quantity','nextRow',
     ...(/^m-mnoz-/.test(state.field)?['work','vehicle','note','job','leader']:[])
   ];
   if (state.section==='work') return [
@@ -894,7 +911,6 @@ function speechTarget(state,command,writes) {
     const count=prefix==='m'?MAX_MATERIAL:MAX_CINNOSTI;
     id=empty(Array.from({length:count},(_,i)=>prefix+'-nazev-'+i));
   }
-  if(command==='unit') id='m-jed-'+state.row;
   if(command==='quantity') id='m-mnoz-'+state.row;
   if(command==='performance') id='c-vykon-'+state.row;
   if(command==='note'||command==='nextNote') {
@@ -921,6 +937,7 @@ function speechTarget(state,command,writes) {
   if(!id || !document.getElementById(id)) return false;
   state.field=id;
   state.original=value(id);
+  state.originalUnit=id.startsWith('m-mnoz-')?value(id.replace('m-mnoz-','m-jed-')):null;
   state.section=id.startsWith('p-')?'person':id.startsWith('m-')?'material':
     id.startsWith('c-')?'work':id.startsWith('note-')?'note':
     ['f-vozidlo','f-prijezd-voz','f-odjezd-voz','f-km','f-vozik'].includes(id)?'vehicle':'general';
@@ -1098,7 +1115,7 @@ function firstEmpty(ids) {
 }
 
 function sheetFields(index) {
-  return [...document.querySelectorAll('#sheet-'+index+' input:not([type=checkbox])')].map(el=>el.id);
+  return [...document.querySelectorAll('#sheet-'+index+' input:not([type=checkbox]):not([readonly])')].map(el=>el.id);
 }
 
 function nextVoiceField(id) {
@@ -1122,14 +1139,19 @@ function defaultVoiceField() {
 
 function writeVoiceValue(id, raw) {
   const el=document.getElementById(id);
-  if (!el) return false;
+  if (!el || el.readOnly) return false;
   let value=cleanVoiceValue(raw);
   if (!value) { setVoiceField(id); return false; }
   if (/^p-(zacatek|prijezd|obed|konec)-/.test(id) || /^f-(prijezd|odjezd)-voz$/.test(id)) {
     value=extractTime(value);
     // Invalid input keeps the intended target selected for a repeated value.
     if (!value) { setVoiceField(id); return false; }
-  } else if (/^p-(km|prispevek)-/.test(id) || id==='f-km' || /^m-mnoz-/.test(id)) {
+  } else if (/^m-mnoz-/.test(id)) {
+    const parsed=parseMaterialQuantity(value);
+    if (!parsed) {setVoiceField(id);return false;}
+    value=parsed.quantity;
+    if (parsed.unit) document.getElementById(id.replace('m-mnoz-','m-jed-')).value=parsed.unit;
+  } else if (/^p-(km|prispevek)-/.test(id) || id==='f-km') {
     value=extractNum(value);
     if (!value) { setVoiceField(id); return false; }
   }
@@ -1153,7 +1175,7 @@ const VOICE_COMMANDS = [
   ['zacatek prace','start'], ['zacatek pracovni doby','start'],
   ['konec prace','end'], ['konec pracovni doby','end'],
   ['zakazka','job'], ['vedouci','leader'], ['poznamka','note'], ['poznamky','note'],
-  ['material','material'], ['jednotka','unit'], ['mnozstvi','quantity'],
+  ['material','material'], ['mnozstvi','quantity'],
   ['prace','work'], ['cinnost','work'], ['cinnosti','work'], ['vykon','performance'],
   ['vozidlo','vehicle'], ['auto','vehicle'], ['odjezd','vehicleDeparture'],
   ['kilometry','km'], ['kilometru','km'], ['km','km'], ['prispevek','contribution'],
@@ -1286,8 +1308,8 @@ function executeVoiceCommand(command, value) {
     }
     return;
   }
-  if (command==='unit' || command==='quantity') {
-    if (currentSheet==='sheet-2') write('m-'+(command==='unit'?'jed':'mnoz')+'-'+voiceMaterialRow);
+  if (command==='quantity') {
+    if (currentSheet==='sheet-2') write('m-mnoz-'+voiceMaterialRow);
     return;
   }
   if (command==='performance') {
@@ -1368,6 +1390,97 @@ function extractNum(text) {
   if (values.length===2 && values[0]>=20 && values[0]%10===0 && values[1]<10) return String(values[0]+values[1]);
   if (values.length===2 && values[0]===100) return String(100+values[1]);
   return '';
+}
+
+// Only Material / Množství uses this map. Units preserve their scale.
+const MATERIAL_UNITS = [
+  ['mg',['mg','miligram','miligramy','miligramu','miligramem','miligramech']],
+  ['kg',['kg','k g','kágé','ká gé','ká ge','kilogram','kilogramy','kilogramu','kilogramem','kilogramech','kilo','kila','kil']],
+  ['g',['g','gé','gram','gramy','gramu','gramem','gramech']],
+  ['t',['t','té','tuna','tuny','tun','tunu','tunou','tunách']],
+  ['mm',['mm','milimetr','milimetry','milimetru','milimetrech']],
+  ['cm',['cm','cé em','centimetr','centimetry','centimetru','centimetrech','centak','centaky','centaku']],
+  ['dm',['dm','dé em','decimetr','decimetry','decimetru']],
+  ['km',['km','ká em','kilometr','kilometry','kilometru','kilometrech']],
+  ['m²',['m²','m2','m 2','m na druhou','em dva','metr ctverecni','metry ctverecni','metru ctverecnich','metru ctverecniho',
+    'metr ctverecny','metry ctverecne','metru ctverecnych']],
+  ['m³',['m³','m3','m 3','m na treti','em tri','metr krychlovy','metry krychlove','metru krychlovych',
+    'metr kubicky','metry kubicke','metru kubickych','kubik','kubiky','kubiku']],
+  ['cm²',['cm²','cm2','cm 2','centimetr ctverecni','centimetry ctverecni','centimetru ctverecnich']],
+  ['cm³',['cm³','cm3','cm 3','centimetr krychlovy','centimetry krychlove','centimetru krychlovych']],
+  ['m',['m','em','metr','metry','metru','metrem','metrech']],
+  ['ha',['ha','hektar','hektary','hektaru','hektarech']],
+  ['a',['a','ar','ary','aru']],
+  ['ml',['ml','mililitr','mililitry','mililitru']],
+  ['cl',['cl','centilitr','centilitry','centilitru']],
+  ['dl',['dl','decilitr','decilitry','decilitru','deci','decka','decky','decek']],
+  ['hl',['hl','hektolitr','hektolitry','hektolitru']],
+  ['l',['l','litr','litry','litru','litrem','litrech','liter']],
+  ['Kč',['kč','kc','ká čé','ká cé','koruna','koruny','korun','korunu','korun českých','českých korun']],
+  ['s',['s','sekunda','sekundy','sekund','sekundu','vterina','vteriny','vterin','vterinu']],
+  ['min',['min','min.','minuta','minuty','minut','minutu']],
+  ['h',['h','hod','hod.','hodina','hodiny','hodin','hodinu','hodka','hodky','hodek']],
+  ['den',['den','dny','dni','dnů','dne']],
+  ['týden',['tyden','tydny','tydnu']],
+  ['ks',['ks','ká es','kus','kusy','kusu','kusech']],
+  ['bal.',['bal','bal.','baleni','balení']],
+  ['pytel',['pytel','pytle','pytlu']],
+  ['paleta',['paleta','palety','palet','paletu']],
+  ['role',['role','roli','rolí']],
+  ['%',['%','procento','procenta','procent']]
+];
+
+const MATERIAL_UNIT_MATCHERS = MATERIAL_UNITS.flatMap(([unit,aliases])=>
+  [...new Set(aliases.map(alias=>normalizeVoice(alias)))].map(alias=>{
+    const escaped=alias.replace(/[.*+?^{}$()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');
+    return {unit,alias,pattern:new RegExp('(?:^|\\s|(?<=\\d))('+escaped+')$','i')};
+  })
+).sort((a,b)=>b.alias.length-a.alias.length);
+
+function materialNumber(text) {
+  const raw=normalizeVoice(cleanVoiceValue(text)).trim();
+  const digits=raw.replace(/[\s\u00a0\u202f]/g,'');
+  if (/^(?:\d+|\d{1,3}(?:[\s\u00a0\u202f]\d{3})+)(?:[.,]\d+)?$/.test(raw)) return digits.replace(',','.');
+  if(raw==='pul'||raw==='polovina') return '0.5';
+  const half=raw.match(/^(.+)\s+a\s+pul$/);
+  if(half) {
+    const whole=materialNumber(half[1]);
+    return whole!=='' ? String(Number(whole)+0.5) : '';
+  }
+  const decimal=raw.match(/^(.+?)\s+(?:carka|cela|cele|celych|tecka)\s+(.+)$/);
+  if(decimal) {
+    const whole=materialNumber(decimal[1]);
+    const fraction=decimal[2].split(/\s+/).map(word=>/^\d+$/.test(word)?word:
+      CZECH_NUMBERS[word]>=0&&CZECH_NUMBERS[word]<10?String(CZECH_NUMBERS[word]):null);
+    return whole!=='' && fraction.every(x=>x!==null) ? whole+'.'+fraction.join('') : '';
+  }
+  const numbers={...CZECH_NUMBERS,dvou:2,sta:100,ste:100,set:100,
+    tisic:1000,tisice:1000,tisicu:1000};
+  const tokens=raw.split(/\s+/);
+  if(tokens.some(token=>!Object.prototype.hasOwnProperty.call(numbers,token))) return '';
+  let total=0,group=0,previous=null;
+  for(const token of tokens) {
+    const value=numbers[token];
+    if(value===1000) {total+=(group||1)*1000;group=0;previous=null;}
+    else if(value===100) {if(group>9) return '';group=(group||1)*100;previous=null;}
+    else {
+      if(previous!==null && !(previous>=20&&previous%10===0&&value>0&&value<10)) return '';
+      group+=value;previous=value;
+    }
+  }
+  return String(total+group);
+}
+
+function parseMaterialQuantity(text) {
+  const normalized=normalizeVoice(cleanVoiceValue(text));
+  for(const {unit,pattern} of MATERIAL_UNIT_MATCHERS) {
+    const match=normalized.match(pattern);
+    if(!match) continue;
+    const quantity=materialNumber(normalized.slice(0,match.index).trim());
+    return quantity!=='' ? {quantity,unit} : null;
+  }
+  const quantity=materialNumber(normalized);
+  return quantity!=='' ? {quantity,unit:null} : null;
 }
 
 function firstEmptyPerson() {
