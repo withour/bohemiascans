@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Diktafon — neomezené diktování</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12151a;
+    --panel:#1b2028;
+    --panel-2:#232a34;
+    --paper:#e6e8e2;
+    --paper-dim:#9aa0a6;
+    --rec:#e3543f;
+    --rec-dim:#7a3a32;
+    --amber:#e0a542;
+    --line:#333b46;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Inter',sans-serif;
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .app{
+    width:100%;
+    max-width:480px;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+    padding:22px 18px 18px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:4px;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:26px;
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+    margin:0 0 2px;
+  }
+  .sub{
+    font-size:13px;
+    color:var(--paper-dim);
+    margin:6px 0 0;
+    line-height:1.5;
+  }
+
+  /* Reel / counter block */
+  .reel-block{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 0 20px;
+  }
+  .reel-wrap{
+    position:relative;
+    width:172px;
+    height:172px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .reel-ring{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    border:2px solid var(--line);
+  }
+  .reel-ring .tick{
+    position:absolute;
+    top:2px; left:50%;
+    width:2px; height:9px;
+    background:var(--line);
+    transform-origin:1px 84px;
+  }
+  .reel-ring.spinning{
+    animation:spin 3.2s linear infinite;
+    border-color:var(--rec-dim);
+  }
+  .reel-ring.spinning .tick{ background:var(--rec-dim); }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+
+  .mic-btn{
+    position:relative;
+    z-index:2;
+    width:120px;
+    height:120px;
+    border-radius:50%;
+    border:none;
+    background:var(--panel-2);
+    color:var(--paper);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition:background .25s ease, box-shadow .25s ease, transform .15s ease;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .mic-btn:active{ transform:scale(0.96); }
+  .mic-btn.on{
+    background:var(--rec);
+    box-shadow:0 0 0 8px rgba(227,84,63,0.12), 0 0 34px rgba(227,84,63,0.35);
+  }
+  .mic-btn svg{ width:38px; height:38px; }
+
+  .timer{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:34px;
+    letter-spacing:0.02em;
+    margin-top:18px;
+    font-variant-numeric:tabular-nums;
+  }
+  .timer .colon{ opacity:.5; }
+  .status-row{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin-top:6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+  }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--paper-dim);
+  }
+  .dot.live{ background:var(--rec); box-shadow:0 0 6px var(--rec); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  .unlimited-note{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--amber);
+    letter-spacing:0.06em;
+    margin-top:14px;
+    text-align:center;
+    opacity:0.85;
+  }
+
+  /* Transcript */
+  .tape{
+    flex:1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px 16px 14px;
+    display:flex;
+    flex-direction:column;
+    min-height:180px;
+    position:relative;
+    overflow:hidden;
+  }
+  .tape-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--paper-dim);
+    display:flex;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .transcript{
+    flex:1;
+    overflow-y:auto;
+    font-size:16px;
+    line-height:1.65;
+    white-space:pre-wrap;
+    word-wrap:break-word;
+  }
+  .transcript .interim{ color:var(--paper-dim); }
+  .transcript:empty::before,
+  .transcript.empty::before{
+    content:"Text přepisu se objeví zde, jakmile začnete mluvit…";
+    color:var(--paper-dim);
+    font-style:italic;
+  }
+
+  /* Controls */
+  .controls{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+  }
+  .btn{
+    flex:1;
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    font-size:14px;
+    padding:13px 10px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--paper);
+    cursor:pointer;
+    transition:background .15s ease, opacity .15s ease;
+  }
+  .btn:active{ background:#2c3542; }
+  .btn:disabled{ opacity:0.35; cursor:default; }
+  .btn.primary{
+    background:var(--rec);
+    border-color:var(--rec);
+  }
+  .btn.primary:active{ background:#c94933; }
+
+  .footer-note{
+    margin-top:14px;
+    font-size:11.5px;
+    color:var(--paper-dim);
+    line-height:1.5;
+    text-align:center;
+  }
+  .footer-note a{ color:var(--amber); }
+
+  .toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    padding:10px 18px;
+    border-radius:999px;
+    font-size:13px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;
+    z-index:10;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .unsupported{
+    background:var(--panel);
+    border:1px solid var(--rec-dim);
+    border-radius:12px;
+    padding:16px;
+    font-size:13.5px;
+    line-height:1.6;
+    margin-top:16px;
+    color:var(--paper);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <p class="eyebrow">Diktafon</p>
+      <h1>Diktování bez limitu</h1>
+    </div>
+  </header>
+  <p class="sub">Stiskněte mikrofon a mluvte. Nahrávání se samo obnovuje, takže může běžet libovolně dlouho.</p>
+
+  <div class="reel-block">
+    <div class="reel-wrap">
+      <div class="reel-ring" id="ring"></div>
+      <button class="mic-btn" id="micBtn" aria-label="Spustit nebo zastavit diktování">
+        <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="timer" id="timer">00<span class="colon">:</span>00<span class="colon">:</span>00</div>
+    <div class="status-row">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Připraveno</span>
+    </div>
+    <div class="unlimited-note">ČASOVĚ NEOMEZENÉ · AUTOMATICKÉ OBNOVENÍ</div>
+  </div>
+
+  <div class="tape">
+    <div class="tape-label">
+      <span>Přepis</span>
+      <span id="wordCount">0 slov</span>
+    </div>
+    <div class="transcript empty" id="transcript"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="clearBtn">Vymazat</button>
+    <button class="btn" id="copyBtn">Kopírovat</button>
+    <button class="btn" id="downloadBtn">Stáhnout .txt</button>
+  </div>
+
+  <p class="footer-note" id="footerNote">Funguje nejlépe v Chromu (Android) nebo Safari (iOS). Přepis běží v prohlížeči a mikrofon je potřeba povolit.</p>
+
+  <div id="unsupportedBox" style="display:none" class="unsupported">
+    Tento prohlížeč bohužel nepodporuje rozpoznávání řeči (Web Speech API). Zkuste prosím otevřít aplikaci v Google Chrome nebo Safari.
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micBtn = document.getElementById('micBtn');
+  const ring = document.getElementById('ring');
+  const timerEl = document.getElementById('timer');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const transcriptEl = document.getElementById('transcript');
+  const wordCountEl = document.getElementById('wordCount');
+  const clearBtn = document.getElementById('clearBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const toast = document.getElementById('toast');
+  const unsupportedBox = document.getElementById('unsupportedBox');
+
+  // build tick marks on the reel ring
+  for(let i=0;i<24;i++){
+    const t = document.createElement('div');
+    t.className = 'tick';
+    t.style.transform = `rotate(${i*15}deg)`;
+    ring.appendChild(t);
+  }
+
+  if(!SpeechRecognition){
+    unsupportedBox.style.display = 'block';
+    micBtn.disabled = true;
+    micBtn.style.opacity = 0.35;
+  }
+
+  let recognition = null;
+  let listening = false;      // user's intent: should we be listening
+  let finalText = '';
+  let secondsElapsed = 0;
+  let timerInterval = null;
+  let restartTimeout = null;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(()=> toast.classList.remove('show'), 1800);
+  }
+
+  function formatTime(totalSeconds){
+    const h = Math.floor(totalSeconds/3600);
+    const m = Math.floor((totalSeconds%3600)/60);
+    const s = totalSeconds%60;
+    const pad = n => String(n).padStart(2,'0');
+    return `${pad(h)}<span class="colon">:</span>${pad(m)}<span class="colon">:</span>${pad(s)}`;
+  }
+
+  function updateWordCount(){
+    const words = finalText.trim().length ? finalText.trim().split(/\s+/).length : 0;
+    wordCountEl.textContent = words + (words === 1 ? ' slovo' : (words >=2 && words <=4 ? ' slova' : ' slov'));
+  }
+
+  function renderTranscript(interim){
+    transcriptEl.classList.toggle('empty', !finalText && !interim);
+    transcriptEl.innerHTML = escapeHtml(finalText) + (interim ? `<span class="interim">${escapeHtml(interim)}</span>` : '');
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function escapeHtml(str){
+    return str.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  }
+
+  function startTimer(){
+    if(timerInterval) return;
+    timerInterval = setInterval(()=>{
+      secondsElapsed++;
+      timerEl.innerHTML = formatTime(secondsElapsed);
+    }, 1000);
+  }
+  function stopTimer(){
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+
+  function setUiListening(on){
+    micBtn.classList.toggle('on', on);
+    ring.classList.toggle('spinning', on);
+    statusDot.classList.toggle('live', on);
+    statusText.textContent = on ? 'Nahrávám' : (secondsElapsed > 0 ? 'Pozastaveno' : 'Připraveno');
+    micBtn.innerHTML = on
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>';
+  }
+
+  function createRecognition(){
+    const r = new SpeechRecognition();
+    r.lang = 'cs-CZ';
+    r.continuous = true;
+    r.interimResults = true;
+
+    r.onresult = (event) => {
+      let interim = '';
+      for(let i = event.resultIndex; i < event.results.length; i++){
+        const res = event.results[i];
+        if(res.isFinal){
+          let piece = res[0].transcript;
+          if(piece && !/\s$/.test(finalText) && finalText.length){
+            piece = piece.replace(/^\s*/, ' ');
+          }
+          finalText += piece;
+        } else {
+          interim += res[0].transcript;
+        }
+      }
+      renderTranscript(interim);
+      updateWordCount();
+    };
+
+    r.onerror = (event) => {
+      // 'no-speech' and some transient errors happen naturally during long
+      // dictation — we simply let onend trigger a restart.
+      if(event.error === 'not-allowed' || event.error === 'service-not-allowed'){
+        listening = false;
+        setUiListening(false);
+        stopTimer();
+        statusText.textContent = 'Přístup k mikrofonu zamítnut';
+        showToast('Povolte prosím přístup k mikrofonu.');
+      }
+    };
+
+    r.onend = () => {
+      // Browsers stop recognition after a period of silence or a fixed
+      // duration. If the user still wants to be listening, restart right away
+      // so dictation effectively has no time limit.
+      if(listening){
+        restartTimeout = setTimeout(() => {
+          try{
+            recognition = createRecognition();
+            recognition.start();
+          }catch(e){ /* will retry on next tick if needed */ }
+        }, 250);
+      }
+    };
+
+    return r;
+  }
+
+  function start(){
+    if(!SpeechRecognition) return;
+    listening = true;
+    finalText = finalText || '';
+    recognition = createRecognition();
+    try{
+      recognition.start();
+      setUiListening(true);
+      startTimer();
+    }catch(e){
+      showToast('Nepodařilo se spustit mikrofon.');
+      listening = false;
+    }
+  }
+
+  function stop(){
+    listening = false;
+    clearTimeout(restartTimeout);
+    if(recognition){
+      try{ recognition.onend = null; recognition.stop(); }catch(e){}
+    }
+    setUiListening(false);
+    stopTimer();
+  }
+
+  micBtn.addEventListener('click', () => {
+    if(!SpeechRecognition) return;
+    if(listening){ stop(); } else { start(); }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    finalText = '';
+    secondsElapsed = 0;
+    timerEl.innerHTML = formatTime(0);
+    renderTranscript('');
+    updateWordCount();
+    showToast('Přepis vymazán');
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    if(!finalText.trim()){ showToast('Zatím není co kopírovat'); return; }
+    try{
+      await navigator.clipboard.writeText(finalText.trim());
+      showToast('Zkopírováno do schránky');
+    }catch(e){
+      showToast('Kopírování se nezdařilo');
+    }
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    if(!finalText.trim()){ showToast('Zatím není co stáhnout'); return; }
+    const blob = new Blob([finalText.trim()], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = `diktafon-${ts}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Staženo');
+  });
+
+  timerEl.innerHTML = formatTime(0);
+  renderTranscript('');
+})();
+</script>
+</body>
+</html>
